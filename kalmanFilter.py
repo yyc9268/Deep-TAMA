@@ -3,7 +3,7 @@ import random
 # from scipy.stats import multivariate_normal
 
 
-class Track:
+class TrackState:
     """
     Track with Kalman filtering
     """

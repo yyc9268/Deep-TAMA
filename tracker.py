@@ -4,6 +4,7 @@ from scipy.optimize import linear_sum_assignment
 import dataLoader as ds
 from copy import deepcopy
 import cv2
+from kalmanFilter import TrackState
 from Tools import IOU, nms
 
 desktop_path = os.path.expanduser("~\Desktop")
@@ -93,40 +94,9 @@ def startTrack():
 
         if len(prev_trk) > 0 and len(dets) > 0:
 
-            pair_mat = np.zeros((len(dets), len(prev_trk)+1, 5*(max_state_num+1)))
-
-            for i in range(0, len(dets)):
-                tmp_det = np.append(dets[i][1:5], 0)
-
-                for j in range(0, len(prev_trk)):
-                    tmp_trk = np.zeros((max_state_num, 5))
-                    for i_state in reversed(range(1, len(prev_trk[j]))):
-                        tmp_trk[i_state-1] = prev_trk[j][i_state]
-                        tmp_trk[i_state-1][-1] = fr_num - tmp_trk[i_state-1][-1]
-                    tmp_pair = np.append(tmp_det, tmp_trk.reshape(1, max_state_num*5))
-                    pair_mat[i, j] = tmp_pair
-                # Empty track
-                tmp_trk = -1*np.ones((max_state_num*5))
-                tmp_pair = np.append(tmp_det, tmp_trk)
-                pair_mat[i, -1] = tmp_pair
-
-            # Vectorize to input
-            pair_vec = pair_mat.reshape((1, -1, 5*(max_state_num+1)))
-
-            # Normalization
-            pair_vec[0, :, 2::5] += pair_vec[0, :, 0::5]
-            pair_vec[0, :, 3::5] += pair_vec[0, :, 1::5]
-            pair_vec[0, :, 0::5] /= seq_info[0]
-            pair_vec[0, :, 2::5] /= seq_info[0]
-            pair_vec[0, :, 1::5] /= seq_info[1]
-            pair_vec[0, :, 3::5] /= seq_info[1]
-            pair_vec[0, :, 4::5] /= seq_info[2]
-
-            sim_vec = deepDa.test(pair_vec)
-            sim_mat = sim_vec.reshape((len(dets), len(prev_trk)+1))
+            sim_mat = np.zeros((len(dets), len(prev_trk)))
 
             # Remove last void track column
-            sim_mat = sim_mat[:, :-1]
             row_ind, col_ind = linear_sum_assignment(-sim_mat)
 
             # Track update
@@ -134,25 +104,12 @@ def startTrack():
             for trk_ind, det_ind in zip(col_ind, row_ind):
                 if sim_mat[det_ind, trk_ind] > assoc_thresh:
                     assoc_det_ind.append(det_ind)
-                    update_det = np.append(dets[det_ind][1:5], fr_num)
-                    if len(prev_trk[trk_ind]) > max_state_num:
-                        prev_trk[trk_ind].pop(1)
-                    prev_trk[trk_ind].append(list(update_det))
-                track.updateTrk(prev_trk)
-            print('trk_assoc_ind : ', assoc_det_ind)
 
             # Associated det removal
             dets = np.delete(dets, assoc_det_ind, axis=0)
             print('remaining det : {}'.format(len(dets)))
 
             # Track termination
-            del_inds = []
-            for trk_ind, trk in enumerate(prev_trk):
-                # If recently updated frame - current_frame < 30
-                if fr_num - trk[-1][-1] > seq_info[2]/3:
-                    del_inds.insert(0, trk_ind)
-
-            track.terminateTrk(del_inds)
 
         # Track initialization
         prev_hyp = deepcopy(track.trk_hyp)
@@ -186,19 +143,19 @@ def startTrack():
         track.hyp_valid.append(tmp_hyp_valid)
         track.hyp_assoc.append(tmp_hyp_assoc)
 
-        def recursive_find(depth, assoc_idx, tmp_trk):
-            if depth == 0:
-                if track.hyp_valid[depth][assoc_idx]:
-                    return tmp_trk
+        def recursive_find(_depth, assoc_idx, _tmp_trk):
+            if _depth == 0:
+                if track.hyp_valid[_depth][assoc_idx]:
+                    return _tmp_trk
                 else:
                     return []
 
-            for next_idx in track.hyp_assoc[depth][assoc_idx]:
-                if track.hyp_valid[depth-1][next_idx] & track.hyp_assoc[depth-1][next_idx]:
-                    if recursive_find(depth-1, next_idx, tmp_trk.insert(0, next_idx)):
-                        return tmp_trk
+            for next_idx in track.hyp_assoc[_depth][assoc_idx]:
+                if track.hyp_valid[_depth-1][next_idx] & track.hyp_assoc[_depth-1][next_idx]:
+                    if recursive_find(_depth-1, next_idx, _tmp_trk.insert(0, next_idx)):
+                        return _tmp_trk
                     else:
-                        tmp_trk.pop(0)
+                        _tmp_trk.pop(0)
             return []
 
         # Init trk
@@ -215,6 +172,11 @@ def startTrack():
                         to_tracks.append(tmp_to_track)
 
         for to_track in to_tracks:
+            tmp_y = to_track[0]
+            init_fr = fr_num
+            tmp_state = TrackState()
+            track.trk_state.append(tmp_state)
+
             track.addHyp(det[1:5], fr_num)
 
         # Init hyp
