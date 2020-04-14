@@ -5,7 +5,7 @@ import dataLoader as ds
 from copy import deepcopy
 import cv2
 from kalmanFilter import TrackState
-from Tools import IOU, nms
+from Tools import IOU, NMS
 
 desktop_path = os.path.expanduser("~\Desktop")
 data_path = os.path.join(desktop_path, "dataset")
@@ -70,8 +70,8 @@ def startTrack():
     data = ds.data(is_test=True)
     frame_end = 1000
     assoc_thresh = 0.5
-    max_state_num = 5
     max_hyp_len = 4
+    miss_thresh = 30
     det_thresh = 0.2
 
     seq_name = "MOT16-02"
@@ -81,12 +81,26 @@ def startTrack():
 
     # 1st frame exception
     bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=1)
+    dets = dets[:, 1:6]
+    keep = NMS(dets)
+    dets = dets[keep]
+
+    # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
     dets = dets[dets[:, 4] > det_thresh].astype(np.int)
-    for det in dets:
-        track.addHyp(det[1:5], 1)
+    track.hyp_dets.append([])
+    track.hyp_valid.append([])
+    track.hyp_assoc.append([])
+    for unassoc_det in dets:
+        track.hyp_dets[-1].append(unassoc_det)
+        track.hyp_valid[-1].append(True)
+        track.hyp_assoc[-1].append([])
 
     for fr_num in range(2, frame_end+1):
         bgr_img, dets = data.get_frame_info(seq_name="MOT16-02", frame_num=fr_num)
+        dets = dets[:, 1:6]
+        keep = NMS(dets)
+        dets = dets[keep]
+        # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = dets[dets[:, 5] > det_thresh].astype(int)
 
         # Track-detection association
@@ -94,9 +108,15 @@ def startTrack():
 
         if len(prev_trk) > 0 and len(dets) > 0:
 
+            # Construct a similarity matrix
             sim_mat = np.zeros((len(dets), len(prev_trk)))
 
-            # Remove last void track column
+            for i, det in enumerate(dets):
+                for j, trk in enumerate(prev_trk):
+                    mot_sim = trk.mahalanobis_distance(det)
+                    sim_mat[i, j] = mot_sim
+
+            # hungarian algorithm
             row_ind, col_ind = linear_sum_assignment(-sim_mat)
 
             # Track update
@@ -109,81 +129,92 @@ def startTrack():
             dets = np.delete(dets, assoc_det_ind, axis=0)
             print('remaining det : {}'.format(len(dets)))
 
-            # Track termination
-
         # Track initialization
-        prev_hyp = deepcopy(track.trk_hyp)
-        unassoc_hyps = [i for i in range(0, len(prev_hyp))]
-        unassoc_dets = [i for i in range(0, len(dets))]
-
-        tmp_hyp_dets = []
-        tmp_hyp_valid = []
-        tmp_hyp_assoc = []
-        if len(dets) > 0 and len(prev_hyp) > 0:
-            for det_ind in unassoc_dets:
-                det = dets[det_ind]
-                is_assoc = False
-                tmp_assoc = []
-                for hyp_ind in unassoc_hyps:
-                    hyp = track.trk_hyp[hyp_ind]
-                    if IOU(det, hyp) > 0.4:
-                        is_assoc = True
-                        tmp_assoc.append(hyp_ind)
-                if is_assoc:
-                    tmp_hyp_dets.append(det)
-                    tmp_hyp_valid.append(True)
-                    tmp_hyp_assoc.append(tmp_assoc)
-
+        dets_unassoc = [True] * len(dets)
         if len(track.hyp_dets) > max_hyp_len:
             track.hyp_dets.pop(0)
             track.hyp_valid.pop(0)
             track.hyp_assoc.pop(0)
 
-        track.hyp_dets.append(tmp_hyp_dets)
-        track.hyp_valid.append(tmp_hyp_valid)
-        track.hyp_assoc.append(tmp_hyp_assoc)
+        if len(track.hyp_dets) > 0 and len(dets) > 0:
+            prev_hyp = deepcopy(track.hyp_dets[-1])
 
-        def recursive_find(_depth, assoc_idx, _tmp_trk):
-            if _depth == 0:
-                if track.hyp_valid[_depth][assoc_idx]:
-                    return _tmp_trk
-                else:
-                    return []
+            tmp_hyp_dets = []
+            tmp_hyp_valid = []
+            tmp_hyp_assoc = []
+            if len(dets) > 0 and len(prev_hyp) > 0:
+                for det_ind, det in enumerate(dets):
+                    is_assoc = False
+                    tmp_assoc = []
+                    for hyp_ind, hyp in enumerate(prev_hyp):
+                        # Hierarchical initialization
+                        if IOU(det, hyp) > 0.4:
+                            is_assoc = True
+                            tmp_assoc.append(hyp_ind)
+                    if is_assoc:
+                        dets_unassoc[det_ind] = False
+                        tmp_hyp_dets.append(det)
+                        tmp_hyp_valid.append(True)
+                        tmp_hyp_assoc.append(tmp_assoc)
 
-            for next_idx in track.hyp_assoc[_depth][assoc_idx]:
-                if track.hyp_valid[_depth-1][next_idx] & track.hyp_assoc[_depth-1][next_idx]:
-                    if recursive_find(_depth-1, next_idx, _tmp_trk.insert(0, next_idx)):
+            track.hyp_dets.append(tmp_hyp_dets)
+            track.hyp_valid.append(tmp_hyp_valid)
+            track.hyp_assoc.append(tmp_hyp_assoc)
+
+            def recursive_find(_depth, assoc_idx, _tmp_trk):
+                if _depth == 0:
+                    if track.hyp_valid[_depth][assoc_idx]:
                         return _tmp_trk
                     else:
-                        _tmp_trk.pop(0)
-            return []
+                        return []
 
-        # Init trk
-        to_tracks = []
-        if len(track.hyp_dets) > max_hyp_len:
-            for tail_assoc in track.hyp_assoc[-1]:
-                for tail_assoc_idx in tail_assoc:
-                    tmp_trk = [tail_assoc_idx]
-                    if recursive_find(max_hyp_len-1, tail_assoc_idx, tmp_trk):
-                        tmp_to_track = []
-                        for depth, hyp_idx in enumerate(tmp_trk):
-                            track.hyp_valid[depth][hyp_idx] = False
-                            tmp_to_track.insert(0, track.hyp_dets[depth][hyp_idx])
-                        to_tracks.append(tmp_to_track)
+                for next_idx in track.hyp_assoc[_depth][assoc_idx]:
+                    if track.hyp_valid[_depth-1][next_idx] & track.hyp_assoc[_depth-1][next_idx]:
+                        if recursive_find(_depth-1, next_idx, _tmp_trk.insert(0, next_idx)):
+                            return _tmp_trk
+                        else:
+                            _tmp_trk.pop(0)
+                return []
 
-        for to_track in to_tracks:
-            tmp_y = to_track[0]
-            init_fr = fr_num
-            tmp_state = TrackState()
-            track.trk_state.append(tmp_state)
+            # Init trk
+            to_tracks = []
+            if len(track.hyp_dets) > max_hyp_len:
+                for tail_assoc in track.hyp_assoc[-1]:
+                    for tail_assoc_idx in tail_assoc:
+                        tmp_trk = [tail_assoc_idx]
+                        out_trk = recursive_find(max_hyp_len-1, tail_assoc_idx, tmp_trk)
+                        if out_trk:
+                            tmp_to_track = []
+                            for depth, hyp_idx in enumerate(out_trk):
+                                track.hyp_valid[depth][hyp_idx] = False
+                                tmp_to_track.insert(0, track.hyp_dets[depth][hyp_idx])
+                            to_tracks.append(tmp_to_track)
 
-            track.addHyp(det[1:5], fr_num)
+            # Recursively update trk
+            for to_track in to_tracks:
+                init_y = to_track[0]
+                init_fr = fr_num - 5
+                init_template = bgr_img[init_y[1]:init_y[1]+init_y[3], init_y[0]:init_y[0]+init_y[2]]
+                tmp_state = TrackState(init_y, init_fr, init_template, track.max_id)
+                track.max_id += 1
+
+                for y in to_track:
+                    tmp_state.predict()
+                    tmp_state.update(y, fr_num)
+
+                track.trk_state.append(tmp_state)
+
+        else:
+            track.hyp_dets.append([])
+            track.hyp_valid.append([])
+            track.hyp_assoc.append([])
 
         # Init hyp
-        for det_ind in unassoc_dets:
-            track.hyp_dets.append(dets[det_ind])
-            track.hyp_valid.append(True)
-            track.hyp_assoc.append([])
+        unassoc_dets = dets[dets_unassoc]
+        for unassoc_det in unassoc_dets:
+            track.hyp_dets[-1].append(unassoc_det)
+            track.hyp_valid[-1].append(True)
+            track.hyp_assoc[-1].append([])
 
         # Track visualization
         if len(track.trk_state) > 0:
@@ -194,6 +225,15 @@ def startTrack():
             cv2.imshow('{}'.format(fr_num), bgr_img)
             cv2.waitKey(-1)
             cv2.destroyAllWindows()
+
+        # Track termination
+        for i, trk in enumerate(track.trk_state[::-1]):
+            if fr_num - trk.recent_fr > miss_thresh:
+                track.trk_state.pop(len(track.trk_state)-i-1)
+
+        # Next frame prediction
+        for trk in track.trk_state:
+            trk.predict()
 
     return NotImplementedError
 

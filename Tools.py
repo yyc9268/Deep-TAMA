@@ -1,10 +1,24 @@
+import copy
+
 """
 Collection of tools handling bounding-boxes
 """
 
-def nms(dets):
+def NMS(orig_dets):
+    """
+    :param dets: [[x, y, w, h], ..., [x, y, w, h]]
+    :return: keeping det indices
+    """
 
-    return None
+    dets = copy.deepcopy(orig_dets)
+    dets = dets[dets[:,5].argsort()[::-1]]
+    keep = [True]*len(dets)
+    for i in range(0, len(dets)-1):
+        for j in range(i+1, len(dets)):
+            if IOU(dets[i], dets[j]) > 0.4:
+                keep[j] = False
+                
+    return keep
 
 def IOU(bb1, bb2):
     x1 = max(bb1[0], bb2[0])

@@ -49,12 +49,13 @@ class TrackState:
 
         return self.X, self.P
 
-    def update(self, y):
+    def update(self, y, fr):
         IM = self.H @ self.X
         IS = self.R + self.H @ self.P @ self.H.T
         K = (self.P @ self.H.T)/IS
         self.X = self.X + K @ (y-IM)
         self.P = self.P - K @ IS @ K.T
+        self.recent_fr = fr
 
         return self.X, self.P
 
