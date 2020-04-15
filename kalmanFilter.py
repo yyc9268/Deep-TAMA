@@ -9,12 +9,12 @@ class TrackState:
     """
     def __init__(self, init_y, init_app, init_fr, track_id):
 
-        # init_y : [x, y, w, h]
-        self.X = np.transpose(np.array([init_y[0],  0, init_y[1], 0]))
+        # init_y : [x, y, w, h, conf, fr]
+        self.X = np.array([[init_y[0]],  [0], [init_y[1]], [0]])
 
         # state transition matrix
         self.Ts = 1 # frame rates
-        self.F1 = np.array([1, self.Ts], [0, 1])
+        self.F1 = np.array([[1, self.Ts], [0, 1]])
         self.Fz = np.zeros((2,2))
         self.F = np.concatenate((np.concatenate((self.F1, self.Fz), 1),
                                  np.concatenate((self.Fz, self.F1), 1)), 0)
@@ -40,7 +40,7 @@ class TrackState:
         self.recent_app = init_app  # recent appearance which may be unreliable
         self.historical_app = []  # set of appearances which are reliable
         self.shape = init_y[2:4]  # width and height
-        self.color = [random.randrange(256), random.randrange(256), random.randrange(256)]
+        self.color = (random.randrange(256), random.randrange(256), random.randrange(256))
         self.track_id = track_id
 
     def predict(self):
@@ -50,17 +50,21 @@ class TrackState:
         return self.X, self.P
 
     def update(self, y, fr):
+        Y = np.array([[y[0]], [y[1]]])
         IM = self.H @ self.X
         IS = self.R + self.H @ self.P @ self.H.T
-        K = (self.P @ self.H.T)/IS
-        self.X = self.X + K @ (y-IM)
+        K = (self.P @ self.H.T)@np.linalg.inv(IS)
+
+        self.X = self.X + K @ (Y-IM)
         self.P = self.P - K @ IS @ K.T
         self.recent_fr = fr
+        self.shape = y[2:4]
 
         return self.X, self.P
 
     def mahalanobis_distance(self, y):
-        X = np.array([self.X[0], self.X[2]]).T
-        d_squared = np.exp(-0.5 * (X-y).T @ np.linalg.inv(self.pos_var) @ (X-y))
+        X = np.array([[self.X[0][0], self.X[2][0]]])
+        Y = np.array([[y[0], y[1]]])
+        d_squared = np.exp(-0.5 * (X-Y) @ np.linalg.inv(self.pos_var) @ (X-Y).T)
 
-        return d_squared
+        return d_squared[0][0]

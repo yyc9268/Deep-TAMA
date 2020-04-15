@@ -4,7 +4,7 @@ import copy
 Collection of tools handling bounding-boxes
 """
 
-def NMS(orig_dets):
+def NMS(orig_dets, iou_thresh):
     """
     :param dets: [[x, y, w, h], ..., [x, y, w, h]]
     :return: keeping det indices
@@ -15,7 +15,7 @@ def NMS(orig_dets):
     keep = [True]*len(dets)
     for i in range(0, len(dets)-1):
         for j in range(i+1, len(dets)):
-            if IOU(dets[i], dets[j]) > 0.4:
+            if IOU(dets[i], dets[j]) > iou_thresh:
                 keep[j] = False
                 
     return keep

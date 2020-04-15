@@ -25,67 +25,33 @@ class Track:
         self.hyp_assoc = []  # [[0, 0, 0], [[1, 3], 2, 2], [], [], []]
         self.max_id = 1
 
-    def initTrk(self, init_inds):
-        for hyp_ind in init_inds:
-            tmp_trk = [self.max_id]
-            for hyp_bb in self.trk_hyp[hyp_ind]:
-                tmp_trk.append(hyp_bb)
-            self.trk_state.append(tmp_trk)
-            self.max_id += 1
-
-        self.delHyp(init_inds)
-
-    def updateTrk(self, updated_trk):
-        self.trk_state = deepcopy(updated_trk)
-
-        return self.trk_state
-
-    def terminateTrk(self, del_inds):
-        for ind in del_inds:
-            self.trk_state.pop(ind)
-
-        return self.trk_state
-
-    def addHyp(self, det, cur_fr):
-        self.trk_hyp.append([list(np.append(det, cur_fr))])
-
-        return self.trk_hyp
-
-    def updateHyp(self, updated_hyp):
-        self.trk_hyp = deepcopy(updated_hyp)
-
-        return self.trk_hyp
-
-    def delHyp(self, del_inds):
-        for hyp_ind in del_inds:
-            self.trk_hyp.pop(hyp_ind)
-
-        return self.trk_hyp
-
-    def visualizeTrk(self, img):
-        return NotImplementedError
 
 def startTrack():
     track = Track()
     data = ds.data(is_test=True)
     frame_end = 1000
     assoc_thresh = 0.5
+    iou_thresh = 0.4
+    dist_thresh = 0.8
     max_hyp_len = 4
     miss_thresh = 30
-    det_thresh = 0.2
+    det_thresh = 0.1
 
     seq_name = "MOT16-02"
+    if not os.path.exists(seq_name):
+        os.mkdir(seq_name)
 
     # get sequence info
     seq_info = data.get_seq_info(seq_name=seq_name)
 
     # 1st frame exception
+    """
     bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=1)
     dets = dets[:, 1:6]
-    keep = NMS(dets)
+    dets = np.hstack((dets, np.ones((dets.shape[0], 1))))
+    keep = NMS(dets, iou_thresh)
     dets = dets[keep]
 
-    # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
     dets = dets[dets[:, 4] > det_thresh].astype(np.int)
     track.hyp_dets.append([])
     track.hyp_valid.append([])
@@ -94,11 +60,13 @@ def startTrack():
         track.hyp_dets[-1].append(unassoc_det)
         track.hyp_valid[-1].append(True)
         track.hyp_assoc[-1].append([])
+    """
 
-    for fr_num in range(2, frame_end+1):
+    for fr_num in range(1, frame_end+1):
         bgr_img, dets = data.get_frame_info(seq_name="MOT16-02", frame_num=fr_num)
         dets = dets[:, 1:6]
-        keep = NMS(dets)
+        dets = np.hstack((dets, np.ones((dets.shape[0], 1))*fr_num))
+        keep = NMS(dets, iou_thresh)
         dets = dets[keep]
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = dets[dets[:, 5] > det_thresh].astype(int)
@@ -123,11 +91,11 @@ def startTrack():
             assoc_det_ind = []
             for trk_ind, det_ind in zip(col_ind, row_ind):
                 if sim_mat[det_ind, trk_ind] > assoc_thresh:
+                    track.trk_state[trk_ind].update(dets[det_ind], fr_num)
                     assoc_det_ind.append(det_ind)
 
             # Associated det removal
             dets = np.delete(dets, assoc_det_ind, axis=0)
-            print('remaining det : {}'.format(len(dets)))
 
         # Track initialization
         dets_unassoc = [True] * len(dets)
@@ -148,7 +116,7 @@ def startTrack():
                     tmp_assoc = []
                     for hyp_ind, hyp in enumerate(prev_hyp):
                         # Hierarchical initialization
-                        if IOU(det, hyp) > 0.4:
+                        if IOU(det, hyp) > iou_thresh:
                             is_assoc = True
                             tmp_assoc.append(hyp_ind)
                     if is_assoc:
@@ -169,8 +137,9 @@ def startTrack():
                         return []
 
                 for next_idx in track.hyp_assoc[_depth][assoc_idx]:
-                    if track.hyp_valid[_depth-1][next_idx] & track.hyp_assoc[_depth-1][next_idx]:
-                        if recursive_find(_depth-1, next_idx, _tmp_trk.insert(0, next_idx)):
+                    if track.hyp_valid[_depth-1][next_idx] and track.hyp_assoc[_depth-1][next_idx]:
+                        _tmp_trk.insert(0, next_idx)
+                        if recursive_find(_depth-1, next_idx, _tmp_trk):
                             return _tmp_trk
                         else:
                             _tmp_trk.pop(0)
@@ -192,15 +161,15 @@ def startTrack():
 
             # Recursively update trk
             for to_track in to_tracks:
-                init_y = to_track[0]
-                init_fr = fr_num - 5
-                init_template = bgr_img[init_y[1]:init_y[1]+init_y[3], init_y[0]:init_y[0]+init_y[2]]
-                tmp_state = TrackState(init_y, init_fr, init_template, track.max_id)
-                track.max_id += 1
-
-                for y in to_track:
-                    tmp_state.predict()
-                    tmp_state.update(y, fr_num)
+                for i, y in enumerate(to_track):
+                    tmp_fr = fr_num - max_hyp_len + i
+                    template = bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]]
+                    if i == 0:
+                        tmp_state = TrackState(y, tmp_fr, template, track.max_id)
+                        track.max_id += 1
+                    else:
+                        tmp_state.predict()
+                        tmp_state.update(y, tmp_fr)
 
                 track.trk_state.append(tmp_state)
 
@@ -217,19 +186,26 @@ def startTrack():
             track.hyp_assoc[-1].append([])
 
         # Track visualization
+        valid_miss_num = 5
         if len(track.trk_state) > 0:
             for trk in track.trk_state:
-                if trk[-1][-1] == fr_num:
-                    cv2.putText(bgr_img, str(trk[0]), tuple(trk[-1][0:2]), cv2.FONT_HERSHEY_COMPLEX, 2, (0, 0, 255), 2)
-                    cv2.rectangle(bgr_img, tuple(trk[-1][0:2]), tuple([trk[-1][0]+trk[-1][2], trk[-1][1]+trk[-1][3]]), (0, 0, 255), 3)
-            cv2.imshow('{}'.format(fr_num), bgr_img)
-            cv2.waitKey(-1)
-            cv2.destroyAllWindows()
+                if trk.recent_fr > fr_num-valid_miss_num:
+                    tmp_X = list(map(int, trk.X))
+                    cv2.putText(bgr_img, str(trk.track_id), (tmp_X[0], tmp_X[2]), cv2.FONT_HERSHEY_COMPLEX, 2, trk.color, 2)
+                    cv2.rectangle(bgr_img, (tmp_X[0], tmp_X[2]), (tmp_X[0]+trk.shape[0], tmp_X[2]+trk.shape[1]), trk.color, 3)
+
+            cv2.imwrite(os.path.join(seq_name, "{}.jpg".format(fr_num)), bgr_img)
+            #cv2.imshow('{}'.format(fr_num), bgr_img)
+            #cv2.waitKey(-1)
+            #cv2.destroyAllWindows()
 
         # Track termination
+        prev_trk_len = len(track.trk_state)
         for i, trk in enumerate(track.trk_state[::-1]):
             if fr_num - trk.recent_fr > miss_thresh:
-                track.trk_state.pop(len(track.trk_state)-i-1)
+                track.trk_state.pop(prev_trk_len - i - 1)
+            elif trk.X[0, 0] <= 0 or trk.X[2, 0] <= 0 or trk.X[0, 0] >= seq_info[0] or trk.X[2, 0] >= seq_info[1]:
+                track.trk_state.pop(prev_trk_len - i - 1)
 
         # Next frame prediction
         for trk in track.trk_state:
