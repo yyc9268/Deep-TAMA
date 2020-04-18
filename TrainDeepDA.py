@@ -1,18 +1,20 @@
 from tensorflow.keras.models import Sequential, Model, load_model
-from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Concatenate, Conv2D, Flatten, Lambda, MaxPool2D
+from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Concatenate, Conv2D, Flatten, MaxPool2D, BatchNormalization, Activation, Softmax
 from tensorflow.keras.backend import sqrt, square, switch, sum, ones_like, print_tensor, constant, maximum, mean, stack, shape, epsilon, squeeze
 from tensorflow.keras.callbacks import TensorBoard
 import tensorflow as tf
 import numpy as np
-import DataSetting as ds
+import dataLoader as dl
 import os
+import random
 
 
-class DeepDa():
+class NeuralNet:
 
-    def __init__(self, is_test=False, train_mode='siamese', max_trk_len=5):
+    def __init__(self, is_test=False, train_mode='siamese', max_trk_len=15):
         self.max_sequence_len = 0
         self.max_trk_len = max_trk_len
+        self.matching_feature_sz = 150
 
         self._save_dir = 'model'
         if not os.path.exists(self._save_dir):
@@ -22,153 +24,153 @@ class DeepDa():
         if not os.path.exists(self._log_dir):
             os.mkdir(self._log_dir)
 
-        self.img_input = Input(shape=(128, 64, 3))
-        self.feature_dist = Input(shape=(None, 150))
-        self.input = Input(shape=(None, 5 * (self.max_trk_len + 1)))
-
-        self.anchor_input = Input(shape=(128, 64, 3))
-        self.pos_input = Input(shape=(128, 64, 3))
-        self.neg_input = Input(shape=(128, 64, 3))
+        self.img_input = Input(shape=(128, 64, 6))
+        self.lstm_input = Input(shape=(None, 5 * (self.max_trk_len + 1)))
 
         if is_test:
-            self.lstm_model = load_model(self._save_dir + '/DeepDa-model-{}.h5'.format(1600), custom_objects={'associationLoss': self.associationLoss})
-            self.feature_extractor_model = load_model(self._save_dir + '/feature_extractor-model={}.h5'.format(1000), custom_objects={'tripletLoss': self.tripletLoss})
+            self.DeepTAMA = load_model(self._save_dir + '/LSTM-model-{}.h5'.format(1600))
+            self.JINet = load_model(self._save_dir + '/JINet-model={}.h5'.format(1000))
+            self.featureExtractor = Model(inputs=self.img_input, outputs=self.JINet.get_layer('matching_feature').output)
         else:
-            if train_mode == 'siamese':
-                self.feature_extractor_model = Model(inputs=self.img_input, outputs=self.feature_extractor())
-                self.siamese_model = Model(inputs=[self.anchor_input, self.pos_input, self.neg_input], outputs=self.siamese())
-                self.lstm_model = []
+            if train_mode == 'JINet':
+                self.JINet = Model(inputs=self.img_input, outputs=self.JINet_output)
+            elif train_mode == 'LSTM':
+                self.JINet = load_model(self._save_dir + '/JINet-model={}.h5'.format(1000))
+                self.DeepTAMA = Model(inputs=self.lstm_input, outputs=self.DeepTAMA_output)
             else:
-                self.feature_extractor_model = load_model(
-                    self._save_dir + '/feature_extractor-model={}.h5'.format(1000),
-                    custom_objects={'tripletLoss': self.tripletLoss})
-                self.lstm_model = Model(inputs=[self.input, self.feature_dist], outputs=self.association_network())
+                raise RuntimeError('No such mode exists')
 
-    def feature_extractor(self):
-        encode1 = Conv2D(filters=16, kernel_size=9, activation='relu')(self.img_input)
-        pool1 = MaxPool2D()(encode1)
-        encode2 = Conv2D(filters=32, kernel_size=5, activation='relu')(pool1)
-        pool2 = MaxPool2D()(encode2)
-        encode3 = Conv2D(filters=64, kernel_size=5, activation='relu')(pool2)
+    def JINet_output(self):
+        encode1 = Conv2D(filters=12, kernel_size=9, activation='relu')(self.img_input)
+        bnorm1 = BatchNormalization()(encode1)
+        relu1 = Activation('relu')(bnorm1)
+        pool1 = MaxPool2D()(relu1)
+        encode2 = Conv2D(filters=16, kernel_size=5, activation='relu')(pool1)
+        bnorm2 = BatchNormalization()(encode2)
+        relu2 = Activation('relu')(bnorm2)
+        pool2 = MaxPool2D()(relu2)
+        encode3 = Conv2D(filters=24, kernel_size=5, activation='relu')(pool2)
         pool3 = MaxPool2D()(encode3)
         flattened = Flatten()(pool3)
-        encode4 = Dense(1150, activation='relu')(flattened)
-        feature = Dense(150, activation='relu')(encode4)
+        encode4 = Dense(1152, activation='relu')(flattened)
+        encode5 = Dense(self.matching_feature_sz, activation='relu', name='matching_feature')(encode4)
+        raw_likelihood = Dense(2, activation='relu')(encode5)
+        likelihood = Softmax()(raw_likelihood)
 
-        return feature
+        return likelihood
 
-    def siamese(self):
-        anchor_net = self.feature_extractor_model(self.anchor_input)
-        pos_net = self.feature_extractor_model(self.pos_input)
-        neg_net = self.feature_extractor_model(self.neg_input)
+    def DeepTAMA_output(self):
+        encode1 = Dense(152, activation='tanh')([self.lstm_input])
+        lstm_out = RNN(LSTMCell(128), return_sequences=False, go_backwards=True)(encode1)
+        decode1 = Dense(64, activation='tanh')(lstm_out)
+        raw_likelihood = Dense(2, activation='softmax')(decode1)
+        likelihood = Softmax()(raw_likelihood)
 
-        pos_dist = Lambda(self.euclideanDistance, name='pos_dist')([anchor_net, pos_net])
-        neg_dist = Lambda(self.euclideanDistance, name='neg_dist')([anchor_net, neg_net])
+        return likelihood
 
-        stacked_dists = Lambda(lambda vects: stack(vects, axis=1), name='stacked_dists')([pos_dist, neg_dist])
+    def trainJINet(self, total_epoch=1000):
+        dataCls = dl.data(check_occlusion=True)
+        val_batch_len = 128
+        train_batch_len = 128
+        val_pos, val_neg = dataCls.get_JINet_batch('validation', val_batch_len)
 
-        return stacked_dists
-
-    def association_network(self):
-
-        encode1 = Dense(64, activation='relu')([self.input, self.feature_dist])
-        encode2 = Dense(32, activation='tanh')(encode1)
-        forward_lstm = RNN(LSTMCell(128), return_sequences=True, go_backwards=True)(encode2)
-        backward_lstm = RNN(LSTMCell(128), return_sequences=True)(encode2)
-        concatenated = Concatenate()([forward_lstm, backward_lstm])
-        decode1 = Dense(64, activation='relu')(concatenated)
-        decode2 = Dense(1, activation='sigmoid')(decode1)
-
-        return decode2
-
-    def associationLoss(self, y_true, y_pred):
-        y_true = tf.convert_to_tensor(y_true, dtype=tf.float32)
-        y_pred = tf.convert_to_tensor(y_pred, dtype=tf.float32)
-        pos_num = sum(y_true)
-        neg_num = sum(ones_like(y_true) - y_true)
-        w = neg_num / pos_num
-        sqr_diff = square(y_pred - y_true)
-        loss = sum(switch(y_true == 1, sqr_diff * w, sqr_diff)) / sum(ones_like(y_true))
-
-        return loss
-
-    def tripletLoss(self, y_true, y_pred):
-        loss = mean(maximum(constant(0), y_pred[:,0,0] - y_pred[:,1,0] + constant(2)))
-        return loss
-
-    def triplet_accuracy(self, y_true, y_pred):
-        return mean(y_pred[:, 0, 0] < y_pred[:, 1, 0] - 1.0)
-
-    def euclideanDistance(self, vecs):
-        x, y = vecs
-        return sqrt(maximum(sum(square(x-y), axis=1, keepdims=True), epsilon()))
-
-    def trainSiamese(self, total_epoch=1000):
-        dataCls = ds.data(check_occlusion=True)
-        val_anchor, val_pos, val_neg = dataCls.get_triplet('validation', 64)
+        # Create validation batch
+        val_x_batch = np.concatenate((val_pos, val_neg), 0)
+        val_y_batch = np.concatenate((np.ones((val_batch_len, 1)), np.ones((val_batch_len, 1))), 0)
+        val_idx = [i for i in range(len(val_x_batch))]
+        random.shuffle(val_idx)
 
         summary_writer = tf.summary.create_file_writer('log')
         with summary_writer.as_default():
-            self.siamese_model.compile(loss=self.tripletLoss, optimizer='adam', metrics=[self.triplet_accuracy])
+            self.JINet.compile(loss=tf.keras.losses.binary_crossentropy, optimizer='adam', metrics='accuracy')
 
             for step in range(1, total_epoch+1):
                 print("Train step : {}".format(step))
-                train_anchor, train_pos, train_neg = dataCls.get_triplet('train', 64)
-                y_train = np.random.randint(2, size=(1, 2, train_anchor.shape[0])).T
+                train_pos, train_neg = dataCls.get_JINet_batch('train', train_batch_len)
 
-                print(train_anchor.shape)
-                print(train_pos.shape)
-                print(train_neg.shape)
-                print(y_train.shape)
+                # Create training batch
+                train_x_batch = np.concatenate((train_pos, train_neg), 0)
+                train_y_batch = np.concatenate((np.ones((train_batch_len, 1)), np.zeros((train_batch_len, 1))), 0)
+                train_idx = [i for i in range(len(train_x_batch))]
+                random.shuffle(train_idx)
 
-                self.siamese_model.fit([train_anchor, train_pos, train_neg], y_train, batch_size=32, epochs=1)
+                self.JINet.fit(train_x_batch[train_idx], train_y_batch[train_idx], batch_size=32, epochs=1)
 
-                if step % 1 == 100:
-                    val_loss1, acc1 = self.siamese_model.evaluate([val_anchor, val_pos, val_neg], y_train,
-                                                                  batch_size=32)
+                if step % 100 == 0:
+                    val_loss1, acc1 = self.JINet.evaluate(val_x_batch[val_idx], val_y_batch[val_idx], batch_size=32)
                     print('{}-step, val_loss1 : {}'.format(step, val_loss1, acc1))
                     tf.summary.scalar('siamese validation loss', val_loss1, step=step)
-                    self.siamese_model.save(self._save_dir + '/feature_extractor-model-{}.h5'.format(step))
+                    self.JINet.save(self._save_dir + '/JINet-model-{}.h5'.format(step))
 
     def trainLSTM(self, total_epoch=5000):
+        dataCls = dl.data()
+        val_batch_len = 128
+        val_pos_img, val_pos_shp, val_neg_img, val_neg_shp, val_trk_len = dataCls.get_LSTM_batch(self.max_trk_len, val_batch_len, 'validation')
 
-        dataCls = ds.data()
+        # Create validation batch
+        features = []
 
-        val_bb_batch, val_template_batch, val_label_batch = dataCls.get_batch(self.max_trk_len, 1, 'validation')
+        # Get pos track features
+        pos_batch = np.zeros((0, 128, 64, 3))
+        neg_batch = np.zeros((0, 128, 64, 3))
+        for i in range(val_batch_len):
+            for j in range(self.max_trk_len-val_trk_len[i], self.max_trk_len):
+                np.concatenate((pos_batch, val_pos_img[i, j]), 0)
+                np.concatenate((neg_batch, val_neg_img[i, j]), 0)
+        pos_feature_batch = self.featureExtractor.predict(pos_batch)
+        neg_feature_batch = self.featureExtractor.predict(neg_batch)
+
+        # Create LSTM input batch
+        cur_idx = 0
+        for i in range(val_batch_len):
+            for j in val_trk_len[i]:
+                pos_track_features = pos_feature_batch[cur_idx:cur_idx+j]
+                neg_track_features = neg_feature_batch[cur_idx:cur_idx+j]
 
         summary_writer = tf.summary.create_file_writer('log')
         with summary_writer.as_default():
 
-            self.lstm_model.compile(loss=self.associationLoss, optimizer='adam', metrics=['accuracy'])
+            self.DeepTAMA.compile(loss=tf.keras.losses.binary_crossentropy, optimizer='adam', metrics=['accuracy'])
 
             for step in range(1, total_epoch+1):
                 print("Training step : {}".format(step))
-                train_bb_batch, train_template_batch, train_label_batch = dataCls.get_batch(self.max_trk_len, 1, 'train')
+                train_pos_img, train_pos_shp, train_neg_img, train_neg_shp, train_trk_len = dataCls.get_LSTM_batch(self.max_trk_len, 64, 'train')
 
-                print('cur len : {}'.format(train_bb_batch.shape[1]))
-                print('max len : {}'.format(self.max_sequence_len))
+                # Create training batch
                 if train_bb_batch.shape[1] > self.max_sequence_len:
                     self.max_sequence_len = train_bb_batch.shape[1]
+                train_features = self.JINet.predict(train_template_batch)
 
-                train_features = self.feature_extractor_model.predict(train_template_batch)
-                self.lstm_model.fit(train_bb_batch, train_label_batch, batch_size=1, epochs=1, use_multiprocessing=True)
+                self.DeepTAMA.fit(train_bb_batch, train_label_batch, batch_size=1, epochs=1, use_multiprocessing=True)
 
                 if step % 100 == 0:
-                    val_loss1, acc1 = self.lstm_model.evaluate(val_bb_batch, val_label_batch, batch_size=1)
+                    val_loss1, acc1 = self.DeepTAMA.evaluate(val_bb_batch, val_label_batch, batch_size=1)
                     tf.summary.scalar('validation loss', val_loss1, step=step)
-                    self.lstm_model.save(self._save_dir + '/DeepDa-model-{}.h5'.format(step))
+                    self.DeepTAMA.save(self._save_dir + '/DeepDa-model-{}.h5'.format(step))
 
-    def test(self, input):
-        assoc_result = self.lstm_model.predict(input)
+    def getJINetLikelihood(self, input_pair):
+        likelihood = self.featureExtractor.predict(input_pair)
 
-        return assoc_result
+        return likelihood
+
+    def getFeature(self, input_pair):
+        feature = self.featureExtractor(input_pair)
+
+        return feature
+
+    def getLikelihood(self, feature):
+        likelihood = self.DeepTAMA.predict(input)
+
+        return likelihood
 
 
 def main():
-    deepDa = DeepDa(train_mode='siamese')
-    deepDa.trainSiamese()
-    # deepDa = DeepDa(train_mode='lstm')
-    # deepDa.trainLSTM()
+    NN = NeuralNet(train_mode='JINet')
+    NN.trainJINet()
+    """
+    NN = NeuralNet(train_mode='LSTM')
+    NN.trainLSTM()
+    """
 
 
 if __name__ == "__main__":
