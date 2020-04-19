@@ -1,7 +1,7 @@
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Concatenate, Conv2D, Flatten, MaxPool2D, BatchNormalization, Activation, Softmax
 from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.optimizers import SGD
+from tensorflow.keras.optimizers import SGD, Adam
 import tensorflow as tf
 import numpy as np
 import dataLoader as dl
@@ -25,17 +25,19 @@ class NeuralNet:
             os.mkdir(self._log_dir)
 
         self.img_input = Input(shape=(128, 64, 6))
-        self.lstm_input = Input(shape=(self.max_trk_len, 5 * (self.max_trk_len + 1)))
+        self.lstm_input = Input(shape=(self.max_trk_len, self.matching_feature_sz+3))
 
         if is_test:
             self.DeepTAMA = load_model(self._save_dir + '/LSTM-model-{}.h5'.format(1000))
-            self.JINet = load_model(self._save_dir + '/JINet-model={}.h5'.format(1000))
+            self.JINet = load_model(self._save_dir + '/JINet-model-{}.h5'.format(1000))
             self.featureExtractor = Model(inputs=self.img_input, outputs=self.JINet.get_layer('matching_feature').output)
         else:
             if train_mode == 'JINet':
                 self.JINet = Model(inputs=self.img_input, outputs=self.JINet_output())
             elif train_mode == 'LSTM':
-                self.JINet = load_model(self._save_dir + '/JINet-model={}.h5'.format(1000))
+                self.JINet = load_model(self._save_dir + '/JINet-model-{}.h5'.format(1000))
+                self.featureExtractor = Model(inputs=self.JINet.inputs,
+                                              outputs=self.JINet.get_layer('matching_feature').output)
                 self.DeepTAMA = Model(inputs=self.lstm_input, outputs=self.DeepTAMA_output())
             else:
                 raise RuntimeError('No such mode exists')
@@ -62,7 +64,7 @@ class NeuralNet:
         return likelihood
 
     def DeepTAMA_output(self):
-        encode1 = Dense(152, activation='tanh')([self.lstm_input])
+        encode1 = Dense(152, activation='tanh')(self.lstm_input)
         lstm_out = RNN(LSTMCell(128), return_sequences=False, go_backwards=True)(encode1)
         decode1 = Dense(64, activation='tanh')(lstm_out)
         raw_likelihood = Dense(2, activation='relu')(decode1)
@@ -113,16 +115,18 @@ class NeuralNet:
             sgd = SGD(lr=1e-2, momentum=0.9, decay=1e-2)
             self.DeepTAMA.compile(loss=tf.keras.losses.categorical_crossentropy, optimizer=sgd, metrics=['accuracy'])
 
-            for step in range(1, total_epoch+1):
+            step_intv = 4
+            for step in range(0, total_epoch+1, step_intv):
                 print("Training step : {}".format(step))
                 train_img_batch, train_shp_batch, train_label_batch, train_trk_len = dataCls.get_LSTM_batch(self.max_trk_len, 1024, 'train')
 
                 # Create training batch
                 train_input_batch, train_idx = self.createLSTMInput(train_img_batch, train_shp_batch, train_trk_len)
 
-                self.DeepTAMA.fit(train_input_batch[train_idx], train_label_batch[train_idx], batch_size=train_batch_len, epochs=1, use_multiprocessing=True)
+                self.DeepTAMA.fit(train_input_batch[train_idx], train_label_batch[train_idx],
+                                  batch_size=train_batch_len, epochs=step+step_intv, initial_epoch=step)
 
-                if step % 100 == 0:
+                if step % 20 == 0:
                     val_loss1, acc1 = self.DeepTAMA.evaluate(val_input_batch[val_idx], val_label_batch[val_idx], batch_size=val_batch_len)
                     tf.summary.scalar('validation loss', val_loss1, step=step)
                     self.DeepTAMA.save(self._save_dir + '/DeepDa-model-{}.h5'.format(step))
@@ -130,20 +134,24 @@ class NeuralNet:
     def createLSTMInput(self, img_batch, shp_batch, trk_len):
 
         # Get pos track features
-        JINet_input_batch = np.zeros((0, 128, 64, 3))
+        JINet_input_batch = np.zeros((sum(trk_len), 128, 64, 6))
+        cur_idx = 0
         for i in range(len(img_batch)):
             for j in range(self.max_trk_len - trk_len[i], self.max_trk_len):
-                np.concatenate((JINet_input_batch, img_batch[i, j]), 0)
+                JINet_input_batch[cur_idx, :, :, :] = img_batch[i, j]
+                cur_idx += 1
+
         feature_batch = self.featureExtractor.predict(JINet_input_batch)
 
         # Create LSTM input batch
-        input_batch = np.zeros((0, self.max_trk_len, self.matching_feature_sz + 3))
+        input_batch = np.zeros((len(img_batch), self.max_trk_len, self.matching_feature_sz + 3))
         cur_idx = 0
         for i in range(len(img_batch)):
-            for j in trk_len[i]:
-                track_features = feature_batch[cur_idx:cur_idx + j]
-                input_batch[i, self.max_trk_len - j:, :-3] = track_features
-                input_batch[i, self.max_trk_len - j:, -3:] = shp_batch[i, self.max_trk_len - j:, :]
+            j = trk_len[i]
+            track_features = feature_batch[cur_idx:cur_idx + j]
+            input_batch[i, self.max_trk_len - j:, :-3] = track_features
+            input_batch[i, self.max_trk_len - j:, -3:] = shp_batch[i, self.max_trk_len - j:, :]
+            cur_idx += j
 
         shuffled_idx = [i for i in range(len(img_batch))]
         random.shuffle(shuffled_idx)
@@ -167,12 +175,11 @@ class NeuralNet:
 
 
 def main():
-    NN = NeuralNet(train_mode='JINet')
-    NN.trainJINet()
-    """
+    # NN = NeuralNet(train_mode='JINet')
+    # NN.trainJINet()
+
     NN = NeuralNet(train_mode='LSTM')
     NN.trainLSTM()
-    """
 
 
 if __name__ == "__main__":
