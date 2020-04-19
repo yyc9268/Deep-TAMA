@@ -6,6 +6,7 @@ from copy import deepcopy
 import cv2
 from kalmanFilter import TrackState
 from Tools import IOU, NMS
+from Config import Config
 
 desktop_path = os.path.expanduser("~\Desktop")
 data_path = os.path.join(desktop_path, "dataset")
@@ -29,13 +30,8 @@ class Track:
 def startTrack():
     track = Track()
     data = ds.data(is_test=True)
+
     frame_end = 1000
-    assoc_thresh = 0.5
-    iou_thresh = 0.4
-    dist_thresh = 0.8
-    max_hyp_len = 4
-    miss_thresh = 30
-    det_thresh = 0.1
 
     seq_name = "MOT16-02"
     if not os.path.exists(seq_name):
@@ -43,6 +39,9 @@ def startTrack():
 
     # get sequence info
     seq_info = data.get_seq_info(seq_name=seq_name)
+
+    # get tracking parameters
+    Conf = Config(seq_info[-1])
 
     # 1st frame exception
     """
@@ -66,10 +65,10 @@ def startTrack():
         bgr_img, dets = data.get_frame_info(seq_name="MOT16-02", frame_num=fr_num)
         dets = dets[:, 1:6]
         dets = np.hstack((dets, np.ones((dets.shape[0], 1))*fr_num))
-        keep = NMS(dets, iou_thresh)
+        keep = NMS(dets, Conf.nms_iou_thresh)
         dets = dets[keep]
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
-        dets = dets[dets[:, 5] > det_thresh].astype(int)
+        dets = dets[dets[:, 5] > Conf.det_thresh].astype(int)
 
         # Track-detection association
         prev_trk = deepcopy(track.trk_state)
@@ -90,7 +89,7 @@ def startTrack():
             # Track update
             assoc_det_ind = []
             for trk_ind, det_ind in zip(col_ind, row_ind):
-                if sim_mat[det_ind, trk_ind] > assoc_thresh:
+                if sim_mat[det_ind, trk_ind] > Conf.assoc_thresh:
                     track.trk_state[trk_ind].update(dets[det_ind], fr_num)
                     assoc_det_ind.append(det_ind)
 
@@ -99,7 +98,7 @@ def startTrack():
 
         # Track initialization
         dets_unassoc = [True] * len(dets)
-        if len(track.hyp_dets) > max_hyp_len:
+        if len(track.hyp_dets) > Conf.max_hyp_len:
             track.hyp_dets.pop(0)
             track.hyp_valid.pop(0)
             track.hyp_assoc.pop(0)
@@ -116,7 +115,7 @@ def startTrack():
                     tmp_assoc = []
                     for hyp_ind, hyp in enumerate(prev_hyp):
                         # Hierarchical initialization
-                        if IOU(det, hyp) > iou_thresh:
+                        if IOU(det, hyp) > Conf.assoc_iou_thresh:
                             is_assoc = True
                             tmp_assoc.append(hyp_ind)
                     if is_assoc:
@@ -147,11 +146,11 @@ def startTrack():
 
             # Init trk
             to_tracks = []
-            if len(track.hyp_dets) > max_hyp_len:
+            if len(track.hyp_dets) > Conf.max_hyp_len:
                 for tail_assoc in track.hyp_assoc[-1]:
                     for tail_assoc_idx in tail_assoc:
                         tmp_trk = [tail_assoc_idx]
-                        out_trk = recursive_find(max_hyp_len-1, tail_assoc_idx, tmp_trk)
+                        out_trk = recursive_find(Conf.max_hyp_len-1, tail_assoc_idx, tmp_trk)
                         if out_trk:
                             tmp_to_track = []
                             for depth, hyp_idx in enumerate(out_trk):
@@ -162,7 +161,7 @@ def startTrack():
             # Recursively update trk
             for to_track in to_tracks:
                 for i, y in enumerate(to_track):
-                    tmp_fr = fr_num - max_hyp_len + i
+                    tmp_fr = fr_num - Conf.max_hyp_len + i
                     template = bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]]
                     if i == 0:
                         tmp_state = TrackState(y, tmp_fr, template, track.max_id)
@@ -202,7 +201,7 @@ def startTrack():
         # Track termination
         prev_trk_len = len(track.trk_state)
         for i, trk in enumerate(track.trk_state[::-1]):
-            if fr_num - trk.recent_fr > miss_thresh:
+            if fr_num - trk.recent_fr > Conf.miss_thresh:
                 track.trk_state.pop(prev_trk_len - i - 1)
             elif trk.X[0, 0] <= 0 or trk.X[2, 0] <= 0 or trk.X[0, 0] >= seq_info[0] or trk.X[2, 0] >= seq_info[1]:
                 track.trk_state.pop(prev_trk_len - i - 1)

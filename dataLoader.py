@@ -6,20 +6,19 @@ import operator
 from copy import deepcopy
 
 desktop_path = os.path.expanduser("~\Desktop")
-data_path = os.path.join(desktop_path, "dataset")
+seq_path = os.path.join(desktop_path, "dataset", 'MOT')
 #seq_path = os.path.join(data_path, "2DMOT2015", "train")
 #seq_path = os.path.join(data_path, "CVPR19Labels", "train")
-seq_path = os.path.join(data_path, "MOT16", "train")
-seqs = np.array(os.listdir(seq_path))
-seq_fps_2015 = []
+all_seqs = np.array(os.listdir(seq_path))
+seqs = []
 
-training_set = ['MOT16-04', 'MOT16-05', 'MOT16-09', 'MOT16-10', 'MOT16-13']
-validation_set = ['MOT16-02', 'MOT16-11']
+training_set = ['TUD-Campus', 'ETH-Sunnyday', 'KITTI-17', 'MOT16-04', 'MOT16-05', 'MOT16-09', 'MOT16-10', 'MOT16-11', 'MOT16-13']
+validation_set = ['TUD-Stadtmitte', 'PETS09-S2L1', 'ETH-Bahnhof', 'KITTI-13', 'MOT16-02']
 
 # Sequence info
 # [width, height, fps]
-training_info = [[1920, 1080, 30], [640, 480, 14], [1920, 1080, 30], [1920, 1080, 30], [1920, 1080, 24]]
-validation_info = [[1920, 1080, 30], [1920, 1080, 30]]
+training_info = [[640, 480, 25], [640, 480, 14], [1224, 370, 10], [1920, 1080, 30], [640, 480, 14], [1920, 1080, 30], [1920, 1080, 30], [1920, 1080, 30], [1920, 1080, 25]]
+validation_info = [[640, 480, 25], [768, 576, 7], [640, 480, 14], [1242, 375, 10], [1920, 1080, 30]]
 
 """
 MOT16
@@ -39,38 +38,34 @@ def read_dets(is_test=False, check_occlusion=False):
     :return: list containing data of whole sequences
     """
 
-    valid_cls = [1, 2, 7]
+    global seqs
 
+    valid_cls = [1, 2, 7]
     seq_lists = []
-    for seq_name in seqs:
+    for seq_name in all_seqs:
+
         if is_test:
+            seqs.append(seq_name)
             det_path = os.path.join(seq_path, seq_name, "det", "det.txt")
         else:
+            if not (seq_name in training_set or seq_name in validation_set):
+                continue
+            seqs.append(seq_name)
             det_path = os.path.join(seq_path, seq_name, "gt", "gt.txt")
         lines = [line.rstrip('\n').split(',') for line in open(det_path)]
 
         if is_test:
             seq_list = [list(list(map(float, line))) for line in lines]
         else:
-            if check_occlusion:
+            if 'MOT16' in seq_name:
                 seq_list = [list(map(round, list(map(float, line)))) for line in lines if (int(line[6]) == 1) & (float(line[8]) > 0.2) & (int(line[7]) in valid_cls)]
             else:
                 seq_list = [list(map(round, list(map(float, line)))) for line in lines]
         seq_lists.append(seq_list)
+
+    seqs = np.array(seqs)
     return seq_lists
 
-
-def read_bgr(seq_name, frame_num):
-    img_path = os.path.join(seq_path, seq_name, "img1", "{0:06d}.jpg".format(frame_num))
-    img = cv2.imread(img_path)
-
-    return img
-
-
-def normalization(img):
-    norm_img = cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-
-    return norm_img
 
 def create_fr_lists(seq_list):
     """
@@ -127,7 +122,7 @@ def augment_bbox(bbox):
     :param bbox: [x, y, w, h]
     :return: augmented bounding-box
     """
-    loc_aug_ratio = np.random.normal(0, 0.1)
+    loc_aug_ratio = np.random.normal(0, 0.05)
     wh_aug_ratio = np.random.normal(1, 0.1)
 
     augmented_bbox = deepcopy(bbox)
@@ -137,25 +132,31 @@ def augment_bbox(bbox):
     return augmented_bbox
 
 
-def create_fake_det(avg_w, std_w, seq_info):
-    fake_w = int(min(max(np.random.normal(avg_w, std_w), avg_w/3), seq_info[0]/10))
-    wh_ratio = min(max(np.random.normal(2, 0.5), 1), 3)
-    fake_h = int(fake_w * wh_ratio)
-    fake_lx = random.choice(range(0, seq_info[0]-fake_w))
-    fake_ty = random.choice(range(0, seq_info[1]-fake_h))
-
-    fake_det = np.array([fake_lx, fake_ty, fake_w, fake_h, 0])
-
-    return fake_det
-
-
 def get_cropped_template(seq_name, fr, bbox):
     img = read_bgr(seq_name, fr)
-    template = img[max(0, bbox[1]):min(img.shape[0], bbox[1] + bbox[3]),
-                 max(0, bbox[0]):min(img.shape[1], bbox[0] + bbox[2])]
-    template = cv2.resize(template, (64, 128))
+    template = img[max(0, int(bbox[1])):min(img.shape[0], int(bbox[1]) + int(bbox[3])),
+                 max(0, int(bbox[0])):min(img.shape[1], int(bbox[0]) + int(bbox[2]))]
 
-    return template
+    is_valid = True
+    if template.shape[0] < 10 or template.shape[1] < 10:
+        is_valid = False
+    else:
+        template = cv2.resize(template, (64, 128))
+
+    return template, is_valid
+
+
+def read_bgr(seq_name, frame_num):
+    img_path = os.path.join(seq_path, seq_name, "img1", "{0:06d}.jpg".format(int(frame_num)))
+    img = cv2.imread(img_path)
+
+    return img
+
+
+def normalization(img):
+    norm_img = cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+    return norm_img
 
 
 def create_JINet_batch(id_lists, train_val, batch_sz):
@@ -171,14 +172,16 @@ def create_JINet_batch(id_lists, train_val, batch_sz):
 
     collected_num = 0
 
-    img_batch = np.zeros((0, 128, 64, 6), dtype='float')
+    img_batch = np.zeros((batch_sz, 128, 64, 6), dtype='float')
     label_batch = []
 
     # Select train&test sequence indexes
     if train_val == 'train':
         name_set = training_set
+        seq_info = training_info
     else:
         name_set = validation_set
+        seq_info = validation_info
 
     seq_idxs = [np.where(seqs == name)[0][0] for name in name_set]
 
@@ -190,6 +193,8 @@ def create_JINet_batch(id_lists, train_val, batch_sz):
         seq_name = name_set[name_idx]
         seq_idx = seq_idxs[name_idx]
         id_list = id_lists[seq_idx]
+        fr_rate = seq_info[name_idx][2]
+        max_fr_diff = fr_rate * 3
 
         # Random anchor ID choice
         anchor_track_idx = random.choice(range(0, len(id_list)))
@@ -197,13 +202,28 @@ def create_JINet_batch(id_lists, train_val, batch_sz):
         if len(anchor_track) < 2:
             continue
         anchor_bb_idx = random.choice(range(0, len(anchor_track)))
-        anchor_bb = anchor_track[anchor_bb_idx]
+        anchor_bb = np.array(anchor_track[anchor_bb_idx], dtype='float')
 
         # Random pos bb choice
-        pos_bb_idx = random.choice(range(0, len(anchor_track)))
+        st_idx = 0
+        for idx in range(anchor_bb_idx-1, -1, -1):
+            if abs(anchor_track[st_idx][0] - anchor_bb[0]) > max_fr_diff:
+                st_idx = idx+1
+                break
+
+        ed_idx = len(anchor_track)-1
+        for idx in range(anchor_bb_idx+1, len(anchor_track), 1):
+            if abs(anchor_track[ed_idx][0] - anchor_bb[0]) > max_fr_diff:
+                ed_idx = idx-1
+                break
+
+        if ed_idx == st_idx:
+            continue
+
+        pos_bb_idx = random.choice(range(st_idx, ed_idx+1))
         while pos_bb_idx == anchor_bb_idx:
-            pos_bb_idx = random.choice(range(0, len(anchor_track)))
-        pos_bb = anchor_track[pos_bb_idx]
+            pos_bb_idx = random.choice(range(st_idx, ed_idx+1))
+        pos_bb = np.array(anchor_track[pos_bb_idx], dtype='float')
 
         # Random neg ID & bb choice
         neg_track_idx = random.choice(range(0, len(id_list)))
@@ -213,20 +233,34 @@ def create_JINet_batch(id_lists, train_val, batch_sz):
         if len(neg_track) == 0:
             continue
         neg_bb_idx = random.choice(range(0, len(neg_track)))
-        neg_bb = neg_track[neg_bb_idx]
+        neg_bb = np.array(neg_track[neg_bb_idx], dtype='float')
 
         # Get RGB templates after applying random noise
-        anchor_img = normalization(get_cropped_template(seq_name, anchor_bb[0], augment_bbox(anchor_bb[1:5])))
-        pos_img = normalization(get_cropped_template(seq_name, pos_bb[0], augment_bbox(pos_bb[1:5])))
-        neg_img = normalization(get_cropped_template(seq_name, neg_bb[0], augment_bbox(neg_bb[1:5])))
 
-        img_batch = np.vstack((img_batch, np.expand_dims(np.concatenate((anchor_img, pos_img), 2), 0)))
-        img_batch = np.vstack((img_batch, np.expand_dims(np.concatenate((anchor_img, neg_img), 2), 0)))
-        label_batch.extend([1, 0])
+        cropped_anchor, is_valid1 = get_cropped_template(seq_name, anchor_bb[0], augment_bbox(anchor_bb[1:5]))
+        cropped_pos, is_valid2 = get_cropped_template(seq_name, pos_bb[0], augment_bbox(pos_bb[1:5]))
+        cropped_neg, is_valid3 = get_cropped_template(seq_name, neg_bb[0], augment_bbox(neg_bb[1:5]))
 
+        if not (is_valid1 and is_valid2 and is_valid3):
+            continue
+
+        anchor_img = normalization(cropped_anchor)
+        pos_img = normalization(cropped_pos)
+        neg_img = normalization(cropped_neg)
+        """
+        if train_val == "train":
+            cv2.imshow('pairs', np.concatenate((anchor_img, pos_img, neg_img), 1))
+            cv2.waitKey(0)
+        """
+
+        img_batch[collected_num, :, :, :] = np.concatenate((anchor_img, pos_img), 2)
+        collected_num += 1
+        img_batch[collected_num, :, :, :] = np.concatenate((anchor_img, neg_img), 2)
         collected_num += 1
 
-    return img_batch, label_batch
+        label_batch.extend([[1, 0], [0, 1]])
+
+    return img_batch, np.array(label_batch)
 
 
 def create_LSTM_batch(max_trk_len, fr_lists, id_lists, trainval, batch_sz = 32):
@@ -239,19 +273,19 @@ def create_LSTM_batch(max_trk_len, fr_lists, id_lists, trainval, batch_sz = 32):
     """
     if trainval == 'train':
         name_set = training_set
+        seq_info = training_info
     else:
         name_set = validation_set
+        seq_info = validation_info
 
     seq_idxs = [np.where(seqs == name)[0][0] for name in name_set]
-    seq_info = training_info
 
-    img_batch = np.zeros((0, max_trk_len, 128, 64, 6), dtype='float')
-    shp_batch = np.zeros((0, max_trk_len, 2), dtype='float')
+    img_batch = np.zeros((batch_sz, max_trk_len, 128, 64, 6), dtype='float')
+    shp_batch = np.zeros((batch_sz, max_trk_len, 3), dtype='float')
     label_batch = []
     track_len = []
 
     min_len = 2
-    max_fr_diff = 60
     collected_num = 0
 
     while collected_num < batch_sz:
@@ -259,17 +293,19 @@ def create_LSTM_batch(max_trk_len, fr_lists, id_lists, trainval, batch_sz = 32):
         name_idx = random.choice(range(len(seq_idxs)))
         seq_idx = seq_idxs[name_idx]
         seq_name = name_set[name_idx]
+        fr_rate = seq_info[name_idx][2]
+        max_fr_diff = fr_rate*3
 
         # Get a positive anchor
         anchor_idx = random.choice([i for i in range(0, len(id_lists[seq_idx]))])
         anchor_id = id_lists[seq_idx][anchor_idx][0]
         anchor_dets = id_lists[seq_idx][anchor_idx][1:]
         anchor_det_idx = random.choice([i for i in range(min_len, len(anchor_dets))])
-        anchor_det = anchor_dets[anchor_det_idx]
+        anchor_det = np.array(anchor_dets[anchor_det_idx], dtype='float')
 
         # Make a positive track
         # Limit a searching range
-        st_idx = 0
+        st_idx = anchor_det_idx
         for idx in range(anchor_det_idx-1, -1, -1):
             if anchor_dets[idx][0] - anchor_det[0] > max_fr_diff:
                 st_idx = idx+1
@@ -290,6 +326,7 @@ def create_LSTM_batch(max_trk_len, fr_lists, id_lists, trainval, batch_sz = 32):
         while neg_det[0] == anchor_id:
             neg_det = random.sample(anchor_fr_dets, 1)
         neg_det[0] = anchor_det[0]
+        neg_det = np.array(neg_det, dtype='float')
 
         # Make batch
         anchor_img = normalization(get_cropped_template(seq_name, anchor_det[0], augment_bbox(anchor_det[1:5])))
@@ -306,8 +343,17 @@ def create_LSTM_batch(max_trk_len, fr_lists, id_lists, trainval, batch_sz = 32):
         tmp_padding_shp_batch = np.zeros((max_trk_len-cur_trk_len, 3), dtype='float')
 
         for pos_det in pos_dets:
+            pos_det = np.array(pos_det, dtype='float')
             pos_img = normalization(get_cropped_template(seq_name, pos_det[0], augment_bbox(pos_det[1:5])))
-            pos_shp = np.array([pos_det[0], *pos_det[3:5]])
+            pos_shp = np.array([pos_det[0], *pos_det[3:5]], dtype='float')
+
+            pos_shp_diff = pos_shp-anchor_shp
+            pos_shp_diff[0] /= fr_rate
+            pos_shp_diff[1:3] /= anchor_shp
+            neg_shp_diff = neg_shp-anchor_shp
+            neg_shp_diff[0] /= fr_rate
+            neg_shp_diff[1:3] /= anchor_shp
+
             tmp_pos_img_batch = np.vstack((tmp_pos_img_batch, np.expand_dims(np.concatenate((pos_img, anchor_img), 2), 0)))
             tmp_pos_shp_batch = np.vstack((tmp_pos_shp_batch, np.expand_dims((pos_shp-anchor_shp)/anchor_shp, 0)))
             tmp_neg_img_batch = np.vstack((tmp_neg_img_batch, np.expand_dims(np.concatenate((pos_img, neg_img), 2), 0)))
@@ -318,21 +364,23 @@ def create_LSTM_batch(max_trk_len, fr_lists, id_lists, trainval, batch_sz = 32):
         tmp_pos_shp_batch = np.vstack((tmp_padding_shp_batch, tmp_pos_shp_batch))
         tmp_neg_shp_batch = np.vstack((tmp_padding_shp_batch, tmp_neg_shp_batch))
 
-        img_batch = np.vstack((img_batch, tmp_pos_img_batch))
-        img_batch = np.vstack((img_batch, tmp_neg_img_batch))
-        shp_batch = np.vstack((shp_batch, tmp_pos_shp_batch))
-        shp_batch = np.vstack((shp_batch, tmp_neg_shp_batch))
-
-        label_batch.extend([1, 0])
-        track_len.extend([cur_trk_len, cur_trk_len])
-
+        img_batch[collected_num, :, :, :, :] = tmp_pos_img_batch
+        shp_batch[collected_num, :, :] = tmp_pos_shp_batch
+        collected_num += 1
+        img_batch[collected_num, :, :, :, :] = tmp_neg_img_batch
+        shp_batch[collected_num, :, :] = tmp_neg_shp_batch
         collected_num += 1
 
-    return img_batch, shp_batch, label_batch, track_len
+        label_batch.extend([[1, 0], [0, 1]])
+        track_len.extend([cur_trk_len, cur_trk_len])
+
+        collected_num += 2
+
+    return img_batch, shp_batch, np.array(label_batch), track_len
 
 
 class data():
-    def __init__(self, is_test=False, check_occlusion=True):
+    def __init__(self, is_test=False, check_occlusion=False):
         self.seq_lists = read_dets(is_test, check_occlusion=check_occlusion)
         self.fr_lists = []
         self.id_lists = []

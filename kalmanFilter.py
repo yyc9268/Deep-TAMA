@@ -1,5 +1,6 @@
 import numpy as np
 import random
+from Config import Config
 # from scipy.stats import multivariate_normal
 
 
@@ -34,22 +35,31 @@ class TrackState:
         # covariance used for motion affinity evaluation
         self.pos_var = np.diag([30**2, 75**2])
 
-        self.historical_frs = []
-        self.recent_fr = init_fr
-        self.shapes = []
         self.recent_app = init_app  # recent appearance which may be unreliable
+        self.recent_conf = 0.5
+        self.recent_fr = init_fr
+        self.recent_shp = init_y[2:4]  # width and height
+
         self.historical_app = []  # set of appearances which are reliable
-        self.shape = init_y[2:4]  # width and height
+        self.historical_conf = []
+        self.historical_frs = []
+        self.historical_shps = []
+
         self.color = (random.randrange(256), random.randrange(256), random.randrange(256))
         self.track_id = track_id
 
-    def predict(self):
+    def predict(self, param, fr):
         self.X = self.F @ self.X
         self.P = self.F @ self.P @ np.transpose(self.F) + self.Q
 
+        # Historical Appearance Management
+        # Deletion rule
+        if fr - self.historical_frs[0] > param.max_hist_age:
+            self.pop_first_hist_element()
+
         return self.X, self.P
 
-    def update(self, y, fr):
+    def update(self, y, app, param, fr):
         Y = np.array([[y[0]], [y[1]]])
         IM = self.H @ self.X
         IS = self.R + self.H @ self.P @ self.H.T
@@ -57,10 +67,34 @@ class TrackState:
 
         self.X = self.X + K @ (Y-IM)
         self.P = self.P - K @ IS @ K.T
+
+        # Historical Appearance Management
+        # Addition rule
+        if self.recent_conf > param.hist_thresh:
+            self.add_recent_to_hist(param, fr)
+
+        # Deletion rule
+        if len(self.historical_app) > param.max_hist_len:
+            self.pop_first_hist_element()
+
+        self.recent_app = app
         self.recent_fr = fr
-        self.shape = y[2:4]
+        self.recent_shp = y[2:4]
 
         return self.X, self.P
+
+    def pop_first_hist_element(self):
+        self.historical_app.pop(0)
+        self.historical_conf.pop(0)
+        self.historical_frs.pop(0)
+        self.historical_frs.pop(0)
+
+    def add_recent_to_hist(self, param, fr):
+        if fr - self.recent_fr >= param.min_hist_intv:
+            self.historical_app.append(self.recent_app)
+            self.historical_conf.append(self.recent_conf)
+            self.historical_frs.append(self.recent_fr)
+            self.historical_shps.append(self.recent_shp)
 
     def mahalanobis_distance(self, y):
         X = np.array([[self.X[0][0], self.X[2][0]]])
