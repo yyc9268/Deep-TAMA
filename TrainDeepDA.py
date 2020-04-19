@@ -28,7 +28,7 @@ class NeuralNet:
         self.lstm_input = Input(shape=(self.max_trk_len, self.matching_feature_sz+3))
 
         if is_test:
-            self.DeepTAMA = load_model(self._save_dir + '/LSTM-model-{}.h5'.format(1000))
+            self.DeepTAMA = load_model(self._save_dir + '/DeepTAMA-model-{}.h5'.format(240))
             self.JINet = load_model(self._save_dir + '/JINet-model-{}.h5'.format(1000))
             self.featureExtractor = Model(inputs=self.img_input, outputs=self.JINet.get_layer('matching_feature').output)
         else:
@@ -129,7 +129,7 @@ class NeuralNet:
                 if step % 20 == 0:
                     val_loss1, acc1 = self.DeepTAMA.evaluate(val_input_batch[val_idx], val_label_batch[val_idx], batch_size=val_batch_len)
                     tf.summary.scalar('validation loss', val_loss1, step=step)
-                    self.DeepTAMA.save(self._save_dir + '/DeepDa-model-{}.h5'.format(step))
+                    self.DeepTAMA.save(self._save_dir + '/DeepTAMA-model-{}.h5'.format(step))
 
     def createLSTMInput(self, img_batch, shp_batch, trk_len):
 

@@ -11,9 +11,10 @@ class Config:
         self.max_hyp_len = 4
         self.miss_thresh = 2 * self.fps
         self.assoc_thresh = 0.5
+        self.init_conf = 0.7
 
         # Historical appearance management parameters
         self.hist_thresh = 0.7
-        self.max_hist_len = 10
+        self.max_hist_len = 8
         self.min_hist_intv = 0.2 * self.fps
         self.max_hist_age = 2 * self.fps

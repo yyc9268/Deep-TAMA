@@ -48,7 +48,7 @@ class TrackState:
         self.color = (random.randrange(256), random.randrange(256), random.randrange(256))
         self.track_id = track_id
 
-    def predict(self, param, fr):
+    def predict(self, fr, param):
         self.X = self.F @ self.X
         self.P = self.F @ self.P @ np.transpose(self.F) + self.Q
 
@@ -59,7 +59,7 @@ class TrackState:
 
         return self.X, self.P
 
-    def update(self, y, app, param, fr):
+    def update(self, y, app, conf, fr, param):
         Y = np.array([[y[0]], [y[1]]])
         IM = self.H @ self.X
         IS = self.R + self.H @ self.P @ self.H.T
@@ -78,6 +78,7 @@ class TrackState:
             self.pop_first_hist_element()
 
         self.recent_app = app
+        self.recent_conf = conf
         self.recent_fr = fr
         self.recent_shp = y[2:4]
 
