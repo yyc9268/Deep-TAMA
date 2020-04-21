@@ -7,7 +7,7 @@ import cv2
 from kalmanFilter import TrackState
 from Tools import IOU, NMS
 from Config import Config
-
+from TrainDeepDA import NeuralNet
 
 class Track:
     def __init__(self, _seq_info, _config, visualization=False):
@@ -22,6 +22,7 @@ class Track:
         self.fps = _seq_info[2]
         self.config = _config
         self.visualization = visualization
+        self.NN = NeuralNet(is_test=True)
 
     def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
@@ -32,13 +33,79 @@ class Track:
 
         if len(prev_trk) > 0 and len(dets) > 0:
 
+            # Get detection templates
+            det_templates = np.zeros((dets.shape[0], 128, 64, 3))
+            for idx, det in enumerate(dets):
+                cropped = bgr_img[det[1]:det[1] + det[3], det[0]:det[0] + det[2]]
+                det_templates[idx, :, :, :] = cv2.resize(cropped, (64, 128))
+
             # Construct a similarity matrix
             sim_mat = np.zeros((len(dets), len(prev_trk)))
 
+            # Motion similarity calculation
             for i, det in enumerate(dets):
                 for j, trk in enumerate(prev_trk):
                     mot_sim = trk.mahalanobis_distance(det)
                     sim_mat[i, j] = mot_sim
+
+            # Appearance similarity calculation
+            # Pre-calculate the Neural-Net input shape to save the time
+            num_matching_templates = []
+            for i in range(sim_mat.shape[0]):
+                for j in range(sim_mat.shape[1]):
+                    if sim_mat[i, j] > config.assoc_thresh:
+                        num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
+                    else:
+                        num_matching_templates.append(0)
+
+            input_templates = np.zeros((sum(num_matching_templates), 128, 64, 6))
+            input_shps = np.zeros((sum(num_matching_templates), 3))
+
+            # Make input batch
+            cur_idx = 0
+            accum_num = 0
+            for i in range(sim_mat.shape[0]):
+                for j in range(sim_mat.shape[1]):
+                    if sim_mat[i, j] > config.assoc_thresh:
+                        matching_tmpls = []
+                        matching_shps = []
+                        anchor_shp = np.array([fr_num, *list(dets[2:4])])
+                        for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps, prev_trk[j].historical_frs):
+                            matching_tmpl = np.concatenate((trk_tmpl, det_templates[i]), 2)
+                            matching_tmpls.append(matching_tmpl)
+                            trk_shp = np.array([trk_fr, *list(trk_shp)])
+                            matching_shp = trk_shp - anchor_shp
+                            matching_shp[0] /= self.fps
+                            matching_shp[1:3] /= anchor_shp[1:3]
+                            matching_shps.append(matching_shp)
+
+                        matching_tmpls.append(np.concatenate((prev_trk[j].recent_app, det_templates[i]), 2))
+                        input_templates[accum_num:num_matching_templates[cur_idx], config.max_hist_len, :, : , :] = np.array(matching_tmpls)
+                        input_shps[accum_num:num_matching_templates[cur_idx], config.max_hist_len, :, :, :] = np.array(matching_shps)
+                        accum_num += 1
+                    cur_idx += 1
+
+            # JI-Net based matching-feature extraction
+            feature_batch = self.NN.getFeature(input_templates)
+
+            # Create LSTM input batch
+            input_batch = np.zeros((sum(num_matching_templates), config.max_hist_len+1, 150+3,))
+            cur_idx = 0
+            for idx, tmp_num in enumerate(num_matching_templates):
+                tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
+                input_batch[idx, self.config.max_hist_len+1 - tmp_num:, :-3] = tmp_features
+                input_batch[idx, self.config.max_hist_len+1 - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
+                cur_idx += tmp_num
+
+            # Final appearance likelihood from Deep-TAMA
+            likelihoods = self.NN.getLikelihood(input_batch)
+
+            cur_idx = 0
+            for i in range(sim_mat.shape[0]):
+                for j in range(sim_mat.shape[1]):
+                    if sim_mat[i, j] > config.assoc_thresh:
+                        sim_mat[i, j] *= likelihoods[cur_idx]
+                    cur_idx += 1
 
             # hungarian algorithm
             row_ind, col_ind = linear_sum_assignment(-sim_mat)

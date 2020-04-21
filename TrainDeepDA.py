@@ -11,7 +11,7 @@ import random
 
 class NeuralNet:
 
-    def __init__(self, is_test=False, train_mode='siamese', max_trk_len=15):
+    def __init__(self, is_test=False, max_trk_len=15, train_mode='None'):
         self.max_sequence_len = 0
         self.max_trk_len = max_trk_len
         self.matching_feature_sz = 150
