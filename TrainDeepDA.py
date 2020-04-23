@@ -30,7 +30,7 @@ class NeuralNet:
         if is_test:
             self.DeepTAMA = load_model(self._save_dir + '/DeepTAMA-model-{}.h5'.format(240))
             self.JINet = load_model(self._save_dir + '/JINet-model-{}.h5'.format(1000))
-            self.featureExtractor = Model(inputs=self.img_input, outputs=self.JINet.get_layer('matching_feature').output)
+            self.featureExtractor = Model(inputs=self.JINet.inputs, outputs=self.JINet.get_layer('matching_feature').output)
         else:
             if train_mode == 'JINet':
                 self.JINet = Model(inputs=self.img_input, outputs=self.JINet_output())

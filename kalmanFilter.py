@@ -8,7 +8,7 @@ class TrackState:
     """
     Track with Kalman filtering
     """
-    def __init__(self, init_y, init_app, init_fr, track_id):
+    def __init__(self, init_y, init_app, init_fr, track_id, param):
 
         # init_y : [x, y, w, h, conf, fr]
         self.X = np.array([[init_y[0]],  [0], [init_y[1]], [0]])
@@ -36,7 +36,7 @@ class TrackState:
         self.pos_var = np.diag([30**2, 75**2])
 
         self.recent_app = init_app  # recent appearance which may be unreliable
-        self.recent_conf = 0.5
+        self.recent_conf = param.hist_thresh + 0.1
         self.recent_fr = init_fr
         self.recent_shp = init_y[2:4]  # width and height
 
@@ -54,8 +54,9 @@ class TrackState:
 
         # Historical Appearance Management
         # Deletion rule
-        if fr - self.historical_frs[0] > param.max_hist_age:
-            self.pop_first_hist_element()
+        if len(self.historical_app) > 0:
+            if fr - self.historical_frs[0] > param.max_hist_age:
+                self.pop_first_hist_element()
 
         return self.X, self.P
 
@@ -91,7 +92,7 @@ class TrackState:
         self.historical_frs.pop(0)
 
     def add_recent_to_hist(self, param, fr):
-        if fr - self.recent_fr >= param.min_hist_intv:
+        if (fr - self.recent_fr) >= param.min_hist_intv:
             self.historical_app.append(self.recent_app)
             self.historical_conf.append(self.recent_conf)
             self.historical_frs.append(self.recent_fr)

@@ -15,6 +15,6 @@ class Config:
 
         # Historical appearance management parameters
         self.hist_thresh = 0.7
-        self.max_hist_len = 8
+        self.max_hist_len = 14
         self.min_hist_intv = 0.2 * self.fps
         self.max_hist_age = 2 * self.fps

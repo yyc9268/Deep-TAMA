@@ -27,6 +27,7 @@ class Track:
     def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = self.det_preprocessing(dets, fr_num)
+        print(dets.shape)
 
         # Track-detection association
         prev_trk = deepcopy(self.trk_state)
@@ -69,7 +70,9 @@ class Track:
                     if sim_mat[i, j] > config.assoc_thresh:
                         matching_tmpls = []
                         matching_shps = []
-                        anchor_shp = np.array([fr_num, *list(dets[2:4])])
+                        anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
+
+                        # Historical appearances
                         for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps, prev_trk[j].historical_frs):
                             matching_tmpl = np.concatenate((trk_tmpl, det_templates[i]), 2)
                             matching_tmpls.append(matching_tmpl)
@@ -79,9 +82,16 @@ class Track:
                             matching_shp[1:3] /= anchor_shp[1:3]
                             matching_shps.append(matching_shp)
 
+                        # Recent appearance
                         matching_tmpls.append(np.concatenate((prev_trk[j].recent_app, det_templates[i]), 2))
-                        input_templates[accum_num:num_matching_templates[cur_idx], config.max_hist_len, :, : , :] = np.array(matching_tmpls)
-                        input_shps[accum_num:num_matching_templates[cur_idx], config.max_hist_len, :, :, :] = np.array(matching_shps)
+                        trk_shp = np.array([prev_trk[j].recent_fr, *list(prev_trk[j].recent_shp)], dtype=float)
+                        matching_shp = trk_shp - anchor_shp
+                        matching_shp[0] /= self.fps
+                        matching_shp[1:3] /= anchor_shp[1:3]
+                        matching_shps.append(matching_shp)
+
+                        input_templates[accum_num:num_matching_templates[cur_idx], :, : , :] = np.array(matching_tmpls)
+                        input_shps[accum_num:num_matching_templates[cur_idx], :] = np.array(matching_shps)
                         accum_num += 1
                     cur_idx += 1
 
@@ -89,13 +99,17 @@ class Track:
             feature_batch = self.NN.getFeature(input_templates)
 
             # Create LSTM input batch
-            input_batch = np.zeros((sum(num_matching_templates), config.max_hist_len+1, 150+3,))
+            valid_matching_templates = [i for i in num_matching_templates if i>0]
+
+            input_batch = np.zeros((sum(num_matching_templates), self.config.max_hist_len+1, 150+3,))
             cur_idx = 0
-            for idx, tmp_num in enumerate(num_matching_templates):
-                tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
-                input_batch[idx, self.config.max_hist_len+1 - tmp_num:, :-3] = tmp_features
-                input_batch[idx, self.config.max_hist_len+1 - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
-                cur_idx += tmp_num
+
+            for idx, tmp_num in enumerate(valid_matching_templates):
+                if tmp_num > 0:
+                    tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
+                    input_batch[idx, self.config.max_hist_len+1 - tmp_num:, :-3] = tmp_features
+                    input_batch[idx, self.config.max_hist_len+1 - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
+                    cur_idx += tmp_num
 
             # Final appearance likelihood from Deep-TAMA
             likelihoods = self.NN.getLikelihood(input_batch)
@@ -104,8 +118,8 @@ class Track:
             for i in range(sim_mat.shape[0]):
                 for j in range(sim_mat.shape[1]):
                     if sim_mat[i, j] > config.assoc_thresh:
-                        sim_mat[i, j] *= likelihoods[cur_idx]
-                    cur_idx += 1
+                        sim_mat[i, j] *= likelihoods[cur_idx][0]
+                        cur_idx += 1
 
             # hungarian algorithm
             row_ind, col_ind = linear_sum_assignment(-sim_mat)
@@ -115,7 +129,7 @@ class Track:
             for trk_ind, det_ind in zip(col_ind, row_ind):
                 if sim_mat[det_ind, trk_ind] > self.config.assoc_thresh:
                     y = dets[det_ind]
-                    template = bgr_img[y[1], y[1] + y[3], y[0], y[0] + y[2]]
+                    template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]: y[0] + y[2]], (64, 128))
                     self.trk_state[trk_ind].update(dets[det_ind], template, sim_mat[det_ind, trk_ind], fr_num, self.config)
                     assoc_det_ind.append(det_ind)
 
@@ -172,13 +186,13 @@ class Track:
             for to_track in to_tracks:
                 for i, y in enumerate(to_track):
                     tmp_fr = fr_num - self.config.max_hyp_len + i
-                    template = bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]]
+                    template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
                     if i == 0:
-                        tmp_state = TrackState(y, tmp_fr, template, self.max_id)
+                        tmp_state = TrackState(y, template, tmp_fr, self.max_id, self.config)
                         self.max_id += 1
                     else:
                         tmp_state.predict(tmp_fr, self.config)
-                        tmp_state.update(y, template, None, tmp_fr, self.config)
+                        tmp_state.update(y, template, self.config.hist_thresh, tmp_fr, self.config)
 
                 self.trk_state.append(tmp_state)
 
@@ -244,8 +258,7 @@ class Track:
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
                 if trk.recent_fr > fr_num - valid_miss_num:
-                    tmp_X = list(map(float, trk.X))
-                    tmp_save.append(tmp_X)
+                    tmp_save.append(trk)
 
         self.trk_result.append(tmp_save)
 
@@ -255,11 +268,13 @@ class Track:
     def track_visualization(self, bgr_img):
         if len(self.trk_result[-1]) > 0:
             for trk in self.trk_result[-1]:
-                tmp_X = list(map(int, trk))
-                cv2.putText(bgr_img, str(trk.track_id), (tmp_X[0], tmp_X[2]), cv2.FONT_HERSHEY_COMPLEX, 2,
+                cv2.putText(bgr_img, str(trk.track_id), (int(trk.X[0]), int(trk.X[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
                             trk.color, 2)
-                cv2.rectangle(bgr_img, (tmp_X[0], tmp_X[2]), (tmp_X[0] + trk.shape[0], tmp_X[2] + trk.shape[1]),
+                cv2.rectangle(bgr_img, (int(trk.X[0]), int(trk.X[2])), (int(trk.X[0] + trk.recent_shp[0]), int(trk.X[2] + trk.recent_shp[1])),
                               trk.color, 3)
+        cv2.imshow('{}'.format(cur_fr), bgr_img)
+        cv2.waitKey(0)
+        cv2.destroyAllWindows()
 
 
 if __name__=="__main__":

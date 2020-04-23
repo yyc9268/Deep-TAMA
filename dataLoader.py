@@ -52,7 +52,7 @@ def read_dets(is_test=False, check_occlusion=False):
                 continue
             seqs.append(seq_name)
             det_path = os.path.join(seq_path, seq_name, "gt", "gt.txt")
-        lines = [line.rstrip('\n').split(',') for line in open(det_path)]
+        lines = [line.rstrip('\n').split(',') for line in open(det_path) if len(line) > 1]
 
         if is_test:
             seq_list = [list(list(map(float, line))) for line in lines]
