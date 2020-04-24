@@ -4,13 +4,14 @@ from scipy.optimize import linear_sum_assignment
 import dataLoader as ds
 from copy import deepcopy
 import cv2
+import time
 from kalmanFilter import TrackState
-from Tools import IOU, NMS
+from Tools import IOU, NMS, normalization
 from Config import Config
 from TrainDeepDA import NeuralNet
 
 class Track:
-    def __init__(self, _seq_info, _config, visualization=False):
+    def __init__(self, seq_name, _seq_info, _config, visualization=False):
         self.trk_result = []
         self.trk_state = []
         self.hyp_dets = []
@@ -18,6 +19,7 @@ class Track:
         self.hyp_assoc = []
         self.max_id = 1
 
+        self.seq_name = seq_name
         self.img_shp = _seq_info[0:2]
         self.fps = _seq_info[2]
         self.config = _config
@@ -27,7 +29,6 @@ class Track:
     def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = self.det_preprocessing(dets, fr_num)
-        print(dets.shape)
 
         # Track-detection association
         prev_trk = deepcopy(self.trk_state)
@@ -74,25 +75,16 @@ class Track:
 
                         # Historical appearances
                         for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps, prev_trk[j].historical_frs):
-                            matching_tmpl = np.concatenate((trk_tmpl, det_templates[i]), 2)
-                            matching_tmpls.append(matching_tmpl)
-                            trk_shp = np.array([trk_fr, *list(trk_shp)])
-                            matching_shp = trk_shp - anchor_shp
-                            matching_shp[0] /= self.fps
-                            matching_shp[1:3] /= anchor_shp[1:3]
-                            matching_shps.append(matching_shp)
+                            self.accumulate_app_pairs(matching_tmpls, trk_tmpl, det_templates[i])
+                            self.accumulate_shp_pairs(matching_shps, trk_shp, trk_fr, anchor_shp)
 
                         # Recent appearance
-                        matching_tmpls.append(np.concatenate((prev_trk[j].recent_app, det_templates[i]), 2))
-                        trk_shp = np.array([prev_trk[j].recent_fr, *list(prev_trk[j].recent_shp)], dtype=float)
-                        matching_shp = trk_shp - anchor_shp
-                        matching_shp[0] /= self.fps
-                        matching_shp[1:3] /= anchor_shp[1:3]
-                        matching_shps.append(matching_shp)
+                        self.accumulate_app_pairs(matching_tmpls, prev_trk[j].recent_app, det_templates[i])
+                        self.accumulate_shp_pairs(matching_shps, prev_trk[j].recent_shp, prev_trk[j].recent_fr, anchor_shp)
 
-                        input_templates[accum_num:num_matching_templates[cur_idx], :, : , :] = np.array(matching_tmpls)
-                        input_shps[accum_num:num_matching_templates[cur_idx], :] = np.array(matching_shps)
-                        accum_num += 1
+                        input_templates[accum_num:accum_num+num_matching_templates[cur_idx], :, : , :] = np.array(matching_tmpls)
+                        input_shps[accum_num:accum_num+num_matching_templates[cur_idx], :] = np.array(matching_shps)
+                        accum_num += num_matching_templates[cur_idx]
                     cur_idx += 1
 
             # JI-Net based matching-feature extraction
@@ -220,15 +212,27 @@ class Track:
         self.track_save(fr_num)
 
         # Track visualization
-        if self.visualization:
-            self.track_visualization(bgr_img)
+        self.track_visualization(bgr_img, fr_num)
 
         # Next frame prediction
         for trk in self.trk_state:
             trk.predict(fr_num+1, self.config)
 
+    def accumulate_shp_pairs(self, to_list, trk_shp, trk_fr, anchor_shp):
+        trk_shp = np.array([trk_fr, *list(trk_shp)])
+        matching_shp = trk_shp - anchor_shp
+        matching_shp[0] /= self.fps
+        matching_shp[1:3] /= anchor_shp[1:3]
+        to_list.append(matching_shp)
+
+    def accumulate_app_pairs(self, to_list, app_pair1, app_pair2):
+        matching_tmpl = np.concatenate((normalization(app_pair1), normalization(app_pair2)), 2)
+        to_list.append(matching_tmpl)
+
     def det_preprocessing(self, dets, fr_num):
         dets = dets[:, 1:6]
+        for i in range(dets.shape[0]):
+            dets[i][dets[i]<0] = 0
         dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
         keep = NMS(dets, self.config.nms_iou_thresh)
         dets = dets[keep]
@@ -254,7 +258,7 @@ class Track:
 
     def track_save(self, fr_num):
         tmp_save = []
-        valid_miss_num = 5
+        valid_miss_num = 1
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
                 if trk.recent_fr > fr_num - valid_miss_num:
@@ -265,16 +269,21 @@ class Track:
     def track_write(self):
         return NotImplementedError
 
-    def track_visualization(self, bgr_img):
+    def track_visualization(self, bgr_img, fr_num):
         if len(self.trk_result[-1]) > 0:
             for trk in self.trk_result[-1]:
                 cv2.putText(bgr_img, str(trk.track_id), (int(trk.X[0]), int(trk.X[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
                             trk.color, 2)
                 cv2.rectangle(bgr_img, (int(trk.X[0]), int(trk.X[2])), (int(trk.X[0] + trk.recent_shp[0]), int(trk.X[2] + trk.recent_shp[1])),
                               trk.color, 3)
-        cv2.imshow('{}'.format(cur_fr), bgr_img)
-        cv2.waitKey(0)
-        cv2.destroyAllWindows()
+            if self.visualization:
+                cv2.imshow('{}'.format(fr_num), bgr_img)
+                cv2.waitKey(0)
+                cv2.destroyAllWindows()
+            else:
+                cv2.imwrite(os.path.join(self.seq_name, '{}.png'.format(fr_num)), bgr_img)
+
+        return bgr_img
 
 
 if __name__=="__main__":
@@ -292,8 +301,10 @@ if __name__=="__main__":
         # get tracking parameters
         config = Config(seq_info[-1])
 
-        track = Track(seq_info, config, visualization=True)
+        track = Track(seq_name, seq_info, config, visualization=False)
         fr_end = 10000
         for cur_fr in range(1, fr_end):
+            st_time = time.time()
             _bgr_img, _dets = data.get_frame_info(seq_name="MOT16-02", frame_num=cur_fr)
             track.track(_bgr_img, _dets, cur_fr)
+            print('{} Sec'.format(time.time()-st_time))

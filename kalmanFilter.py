@@ -89,7 +89,6 @@ class TrackState:
         self.historical_app.pop(0)
         self.historical_conf.pop(0)
         self.historical_frs.pop(0)
-        self.historical_frs.pop(0)
 
     def add_recent_to_hist(self, param, fr):
         if (fr - self.recent_fr) >= param.min_hist_intv:

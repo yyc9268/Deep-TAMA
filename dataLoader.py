@@ -4,6 +4,7 @@ import random
 import cv2
 import operator
 from copy import deepcopy
+from Tools import NMS, IOU, normalization
 
 desktop_path = os.path.expanduser("~\Desktop")
 seq_path = os.path.join(desktop_path, "dataset", 'MOT')
@@ -151,12 +152,6 @@ def read_bgr(seq_name, frame_num):
     img = cv2.imread(img_path)
 
     return img
-
-
-def normalization(img):
-    norm_img = cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-
-    return norm_img
 
 
 def create_JINet_batch(id_lists, train_val, batch_sz):

@@ -1,4 +1,5 @@
 import copy
+import cv2
 
 """
 Collection of tools handling bounding-boxes
@@ -34,3 +35,8 @@ def IOU(bb1, bb2):
     iou = intersection/float(bb1_area + bb2_area - intersection)
 
     return iou
+
+def normalization(img):
+    norm_img = cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
+
+    return norm_img
