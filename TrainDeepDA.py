@@ -73,9 +73,9 @@ class NeuralNet:
         return likelihood
 
     def trainJINet(self, train_batch_len=128, val_batch_len=128, total_epoch=5000):
-        dataCls = dl.data(check_occlusion=False)
+        dataCls = dl.data(is_test=False)
 
-        val_x_batch, val_y_batch = dataCls.get_JINet_batch('validation', 2048)
+        val_x_batch, val_y_batch = dataCls.get_JINet_batch(2048, 'validation')
 
         # Create validation batch
         val_idx = [i for i in range(len(val_x_batch))]
@@ -88,7 +88,7 @@ class NeuralNet:
             step_intv = 4
             for step in range(0, total_epoch+1, step_intv):
                 print("Train step : {}".format(step))
-                train_x_batch, train_y_batch = dataCls.get_JINet_batch('train', 2048)
+                train_x_batch, train_y_batch = dataCls.get_JINet_batch(2048, 'train')
 
                 # Create training batch
                 train_idx = [i for i in range(len(train_x_batch))]

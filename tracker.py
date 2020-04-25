@@ -1,17 +1,14 @@
 import os
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-import dataLoader as ds
 from copy import deepcopy
 import cv2
-import time
 from kalmanFilter import TrackState
 from Tools import IOU, NMS, normalization
-from Config import Config
 from TrainDeepDA import NeuralNet
 
 class Track:
-    def __init__(self, seq_name, _seq_info, _config, visualization=False):
+    def __init__(self, seq_name, seq_info, config, visualization=False):
         self.trk_result = []
         self.trk_state = []
         self.hyp_dets = []
@@ -20,9 +17,9 @@ class Track:
         self.max_id = 1
 
         self.seq_name = seq_name
-        self.img_shp = _seq_info[0:2]
-        self.fps = _seq_info[2]
-        self.config = _config
+        self.img_shp = seq_info[0:2]
+        self.fps = seq_info[2]
+        self.config = config
         self.visualization = visualization
         self.NN = NeuralNet(is_test=True)
 
@@ -55,7 +52,7 @@ class Track:
             num_matching_templates = []
             for i in range(sim_mat.shape[0]):
                 for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > config.assoc_thresh:
+                    if sim_mat[i, j] > self.config.assoc_thresh:
                         num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
                     else:
                         num_matching_templates.append(0)
@@ -68,7 +65,7 @@ class Track:
             accum_num = 0
             for i in range(sim_mat.shape[0]):
                 for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > config.assoc_thresh:
+                    if sim_mat[i, j] > self.config.assoc_thresh:
                         matching_tmpls = []
                         matching_shps = []
                         anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
@@ -109,7 +106,7 @@ class Track:
             cur_idx = 0
             for i in range(sim_mat.shape[0]):
                 for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > config.assoc_thresh:
+                    if sim_mat[i, j] > self.config.assoc_thresh:
                         sim_mat[i, j] *= likelihoods[cur_idx][0]
                         cur_idx += 1
 
@@ -205,7 +202,7 @@ class Track:
         for i, trk in enumerate(self.trk_state[::-1]):
             if fr_num - trk.recent_fr > self.config.miss_thresh:
                 self.trk_state.pop(prev_trk_len - i - 1)
-            elif trk.X[0, 0] <= 0 or trk.X[2, 0] <= 0 or trk.X[0, 0] >= seq_info[0] or trk.X[2, 0] >= seq_info[1]:
+            elif trk.X[0, 0] <= 0 or trk.X[2, 0] <= 0 or trk.X[0, 0] >= self.img_shp[0] or trk.X[2, 0] >= self.img_shp[1]:
                 self.trk_state.pop(prev_trk_len - i - 1)
 
         # Track save
@@ -284,27 +281,3 @@ class Track:
                 cv2.imwrite(os.path.join(self.seq_name, '{}.png'.format(fr_num)), bgr_img)
 
         return bgr_img
-
-
-if __name__=="__main__":
-
-    seq_names = ["MOT17-02-SDP"]
-    data = ds.data(is_test=True)
-
-    for seq_name in seq_names:
-        if not os.path.exists(seq_name):
-            os.mkdir(seq_name)
-
-        # get sequence info
-        seq_info = data.get_seq_info(seq_name=seq_name)
-
-        # get tracking parameters
-        config = Config(seq_info[-1])
-
-        track = Track(seq_name, seq_info, config, visualization=False)
-        fr_end = 10000
-        for cur_fr in range(1, fr_end):
-            st_time = time.time()
-            _bgr_img, _dets = data.get_frame_info(seq_name="MOT16-02", frame_num=cur_fr)
-            track.track(_bgr_img, _dets, cur_fr)
-            print('{} Sec'.format(time.time()-st_time))

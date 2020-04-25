@@ -1,7 +1,6 @@
 import numpy as np
 import random
 from Config import Config
-# from scipy.stats import multivariate_normal
 
 
 class TrackState:
