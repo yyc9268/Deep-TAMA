@@ -14,12 +14,12 @@ all_seqs = np.array(os.listdir(seq_path))
 seqs = []
 
 training_set = ['TUD-Campus', 'ETH-Sunnyday', 'KITTI-17', 'MOT16-04', 'MOT16-05', 'MOT16-09', 'MOT16-10', 'MOT16-11', 'MOT16-13']
-validation_set = ['TUD-Stadtmitte', 'PETS09-S2L1', 'ETH-Bahnhof', 'KITTI-13', 'MOT16-02']
+validation_set = ['TUD-Stadtmitte', 'PETS09-S2L1', 'ETH-Bahnhof', 'KITTI-13', 'MOT16-02', 'MOT17-02-SDP']
 
 # Sequence info
 # [width, height, fps]
 training_info = [[640, 480, 25], [640, 480, 14], [1224, 370, 10], [1920, 1080, 30], [640, 480, 14], [1920, 1080, 30], [1920, 1080, 30], [1920, 1080, 30], [1920, 1080, 25]]
-validation_info = [[640, 480, 25], [768, 576, 7], [640, 480, 14], [1242, 375, 10], [1920, 1080, 30]]
+validation_info = [[640, 480, 25], [768, 576, 7], [640, 480, 14], [1242, 375, 10], [1920, 1080, 30], [1920, 1080, 30]]
 
 """
 MOT16
@@ -30,6 +30,14 @@ validation :  {MOT16-02, MOT16-11}
 training : 
 validation : 
 """
+
+def read_seq_info(seq_name):
+
+    with open(os.path.join(seq_path, 'seq_info', '{}.txt'.format(seq_name))) as seq_info_file:
+        line = seq_info_file.readline()
+        seq_info = line.split(',')
+
+    return seq_info
 
 
 def read_dets(is_test=False, check_occlusion=False):

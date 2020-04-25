@@ -4,7 +4,7 @@ class Config:
         self.fps = fps
 
         # Tracking parameters
-        self.det_thresh = 0.2
+        self.det_thresh = 0.9
         self.nms_iou_thresh = 0.4
         self.assoc_iou_thresh = 0.45 * (1.0 / (1.0 + max(0.0, min(0.5, 1.0/self.fps))))
         self.assoc_dist_thresh = 0.8 * (1.0 / (1.0 + max(0.0, min(0.5, 1.0/self.fps))))

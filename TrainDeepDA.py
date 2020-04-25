@@ -1,5 +1,5 @@
 from tensorflow.keras.models import Sequential, Model, load_model
-from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Concatenate, Conv2D, Flatten, MaxPool2D, BatchNormalization, Activation, Softmax
+from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Conv2D, Flatten, MaxPool2D, BatchNormalization, Activation, Softmax
 from tensorflow.keras.callbacks import TensorBoard
 from tensorflow.keras.optimizers import SGD, Adam
 import tensorflow as tf

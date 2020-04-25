@@ -288,7 +288,7 @@ class Track:
 
 if __name__=="__main__":
 
-    seq_names = ["MOT16-02"]
+    seq_names = ["MOT17-02-SDP"]
     data = ds.data(is_test=True)
 
     for seq_name in seq_names:
