@@ -202,7 +202,7 @@ class Track:
         # Track termination
         prev_trk_len = len(self.trk_state)
         for i, trk in enumerate(self.trk_state[::-1]):
-            if fr_num - trk.recent_fr > self.config.miss_thresh:
+            if (fr_num - trk.recent_fr) > self.config.miss_thresh:
                 self.trk_state.pop(prev_trk_len - i - 1)
             elif trk.X[0, 0] <= 0 or trk.X[2, 0] <= 0 or trk.X[0, 0] >= self.img_shp[0] or trk.X[2, 0] >= self.img_shp[1]:
                 self.trk_state.pop(prev_trk_len - i - 1)
