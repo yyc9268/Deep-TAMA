@@ -9,7 +9,7 @@ class Config:
         self.assoc_iou_thresh = 0.45 * (1.0 / (1.0 + max(0.0, min(0.5, 1.0/self.fps))))
         self.assoc_dist_thresh = 0.8 * (1.0 / (1.0 + max(0.0, min(0.5, 1.0/self.fps))))
         self.max_hyp_len = 4
-        self.miss_thresh = 2 * self.fps
+        self.miss_thresh = self.fps
         self.assoc_thresh = 0.3
         self.init_conf = 0.7
 

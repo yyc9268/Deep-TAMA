@@ -125,11 +125,9 @@ class data():
         seq_infos = []
         for seq_name in self.seq_names:
             # sequence info format [width, height, fps, total_frame_num]
-            with open(os.path.join('seqence_infos', '{}.txt'.format(seq_name))) as seq_info_file:
+            with open(os.path.join('sequence_infos', '{}.txt'.format(seq_name))) as seq_info_file:
                 line = seq_info_file.readline()
-                seq_infos.append(line.split(','))
-
-        print(seq_infos)
+                seq_infos.append(list(map(int, line.split(','))))
 
         return seq_infos
 
@@ -145,7 +143,7 @@ class data():
         :param frame_num: current frame number
         :return: bgr image, current frame bbox list
         """
-        seq_idx = np.where(self.seq_names == seq_name)[0][0]
+        seq_idx = np.where(np.array(self.seq_names) == seq_name)[0][0]
         fr_list = self.fr_lists[seq_idx]
         cur_fr_list = fr_list[frame_num-1]
         cur_img = self.read_bgr(seq_name, frame_num)

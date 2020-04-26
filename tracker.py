@@ -57,58 +57,59 @@ class Track:
                     else:
                         num_matching_templates.append(0)
 
-            input_templates = np.zeros((sum(num_matching_templates), 128, 64, 6))
-            input_shps = np.zeros((sum(num_matching_templates), 3))
+            if sum(num_matching_templates) > 0:
+                input_templates = np.zeros((sum(num_matching_templates), 128, 64, 6))
+                input_shps = np.zeros((sum(num_matching_templates), 3))
 
-            # Make input batch
-            cur_idx = 0
-            accum_num = 0
-            for i in range(sim_mat.shape[0]):
-                for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > self.config.assoc_thresh:
-                        matching_tmpls = []
-                        matching_shps = []
-                        anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
+                # Make input batch
+                cur_idx = 0
+                accum_num = 0
+                for i in range(sim_mat.shape[0]):
+                    for j in range(sim_mat.shape[1]):
+                        if sim_mat[i, j] > self.config.assoc_thresh:
+                            matching_tmpls = []
+                            matching_shps = []
+                            anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
 
-                        # Historical appearances
-                        for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps, prev_trk[j].historical_frs):
-                            self.accumulate_app_pairs(matching_tmpls, trk_tmpl, det_templates[i])
-                            self.accumulate_shp_pairs(matching_shps, trk_shp, trk_fr, anchor_shp)
+                            # Historical appearances
+                            for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps, prev_trk[j].historical_frs):
+                                self.accumulate_app_pairs(matching_tmpls, trk_tmpl, det_templates[i])
+                                self.accumulate_shp_pairs(matching_shps, trk_shp, trk_fr, anchor_shp)
 
-                        # Recent appearance
-                        self.accumulate_app_pairs(matching_tmpls, prev_trk[j].recent_app, det_templates[i])
-                        self.accumulate_shp_pairs(matching_shps, prev_trk[j].recent_shp, prev_trk[j].recent_fr, anchor_shp)
+                            # Recent appearance
+                            self.accumulate_app_pairs(matching_tmpls, prev_trk[j].recent_app, det_templates[i])
+                            self.accumulate_shp_pairs(matching_shps, prev_trk[j].recent_shp, prev_trk[j].recent_fr, anchor_shp)
 
-                        input_templates[accum_num:accum_num+num_matching_templates[cur_idx], :, : , :] = np.array(matching_tmpls)
-                        input_shps[accum_num:accum_num+num_matching_templates[cur_idx], :] = np.array(matching_shps)
-                        accum_num += num_matching_templates[cur_idx]
-                    cur_idx += 1
-
-            # JI-Net based matching-feature extraction
-            feature_batch = self.NN.getFeature(input_templates)
-
-            # Create LSTM input batch
-            valid_matching_templates = [i for i in num_matching_templates if i>0]
-
-            input_batch = np.zeros((sum(num_matching_templates), self.config.max_hist_len+1, 150+3,))
-            cur_idx = 0
-
-            for idx, tmp_num in enumerate(valid_matching_templates):
-                if tmp_num > 0:
-                    tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
-                    input_batch[idx, self.config.max_hist_len+1 - tmp_num:, :-3] = tmp_features
-                    input_batch[idx, self.config.max_hist_len+1 - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
-                    cur_idx += tmp_num
-
-            # Final appearance likelihood from Deep-TAMA
-            likelihoods = self.NN.getLikelihood(input_batch)
-
-            cur_idx = 0
-            for i in range(sim_mat.shape[0]):
-                for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > self.config.assoc_thresh:
-                        sim_mat[i, j] *= likelihoods[cur_idx][0]
+                            input_templates[accum_num:accum_num+num_matching_templates[cur_idx], :, : , :] = np.array(matching_tmpls)
+                            input_shps[accum_num:accum_num+num_matching_templates[cur_idx], :] = np.array(matching_shps)
+                            accum_num += num_matching_templates[cur_idx]
                         cur_idx += 1
+
+                # JI-Net based matching-feature extraction
+                feature_batch = self.NN.getFeature(input_templates)
+
+                # Create LSTM input batch
+                valid_matching_templates = [i for i in num_matching_templates if i>0]
+
+                input_batch = np.zeros((sum(num_matching_templates), self.config.max_hist_len+1, 150+3,))
+                cur_idx = 0
+
+                for idx, tmp_num in enumerate(valid_matching_templates):
+                    if tmp_num > 0:
+                        tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
+                        input_batch[idx, self.config.max_hist_len+1 - tmp_num:, :-3] = tmp_features
+                        input_batch[idx, self.config.max_hist_len+1 - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
+                        cur_idx += tmp_num
+
+                # Final appearance likelihood from Deep-TAMA
+                likelihoods = self.NN.getLikelihood(input_batch)
+
+                cur_idx = 0
+                for i in range(sim_mat.shape[0]):
+                    for j in range(sim_mat.shape[1]):
+                        if sim_mat[i, j] > self.config.assoc_thresh:
+                            sim_mat[i, j] *= likelihoods[cur_idx][0]
+                            cur_idx += 1
 
             # hungarian algorithm
             row_ind, col_ind = linear_sum_assignment(-sim_mat)
@@ -191,11 +192,12 @@ class Track:
             self.hyp_assoc.append([])
 
         # Init hyp
-        unassoc_dets = dets[dets_unassoc]
-        for unassoc_det in unassoc_dets:
-            self.hyp_dets[-1].append(unassoc_det)
-            self.hyp_valid[-1].append(True)
-            self.hyp_assoc[-1].append([])
+        if len(dets) > 0:
+            unassoc_dets = dets[dets_unassoc]
+            for unassoc_det in unassoc_dets:
+                self.hyp_dets[-1].append(unassoc_det)
+                self.hyp_valid[-1].append(True)
+                self.hyp_assoc[-1].append([])
 
         # Track termination
         prev_trk_len = len(self.trk_state)
@@ -227,13 +229,16 @@ class Track:
         to_list.append(matching_tmpl)
 
     def det_preprocessing(self, dets, fr_num):
-        dets = dets[:, 1:6]
-        for i in range(dets.shape[0]):
-            dets[i][dets[i]<0] = 0
-        dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
-        keep = NMS(dets, self.config.nms_iou_thresh)
-        dets = dets[keep]
-        dets = dets[dets[:, 5] > self.config.det_thresh].astype(int)
+        if len(dets) > 0:
+            dets = dets[:, 1:6]
+            for i in range(dets.shape[0]):
+                dets[i][dets[i]<0] = 0
+            dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
+            keep = NMS(dets, self.config.nms_iou_thresh)
+            dets = dets[keep]
+            dets = dets[dets[:, 5] > self.config.det_thresh].astype(int)
+        else:
+            dets = []
 
         return dets
 
@@ -273,11 +278,11 @@ class Track:
                             trk.color, 2)
                 cv2.rectangle(bgr_img, (int(trk.X[0]), int(trk.X[2])), (int(trk.X[0] + trk.recent_shp[0]), int(trk.X[2] + trk.recent_shp[1])),
                               trk.color, 3)
-            if self.visualization:
-                cv2.imshow('{}'.format(fr_num), bgr_img)
-                cv2.waitKey(0)
-                cv2.destroyAllWindows()
-            else:
-                cv2.imwrite(os.path.join(self.seq_name, '{}.png'.format(fr_num)), bgr_img)
+        if self.visualization:
+            cv2.imshow('{}'.format(fr_num), bgr_img)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        else:
+            cv2.imwrite(os.path.join('results', self.seq_name, '{}.png'.format(fr_num)), bgr_img)
 
         return bgr_img

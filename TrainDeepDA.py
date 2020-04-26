@@ -72,7 +72,7 @@ class NeuralNet:
 
         return likelihood
 
-    def trainJINet(self, train_batch_len=128, val_batch_len=128, total_epoch=5000):
+    def trainJINet(self, train_batch_len=128, val_batch_len=128, total_epoch=1000):
         dataCls = dl.data(is_test=False)
 
         val_x_batch, val_y_batch = dataCls.get_JINet_batch(2048, 'validation')
@@ -102,7 +102,7 @@ class NeuralNet:
                     tf.summary.scalar('siamese validation loss', val_loss1, step=step)
                     self.JINet.save(self._save_dir + '/JINet-model-{}.h5'.format(step))
 
-    def trainLSTM(self, train_batch_len=128, val_batch_len=128, total_epoch=5000):
+    def trainLSTM(self, train_batch_len=128, val_batch_len=128, total_epoch=240):
         dataCls = dl.data()
 
         val_img_batch, val_shp_batch, val_label_batch, val_trk_len = dataCls.get_LSTM_batch(self.max_trk_len, 1024, 'validation')
