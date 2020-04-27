@@ -1,9 +1,8 @@
 import numpy as np
 import random
-from Config import Config
 
 
-class TrackState:
+class trackState:
     """
     Track with Kalman filtering
     """
@@ -44,8 +43,15 @@ class TrackState:
         self.historical_frs = []
         self.historical_shps = []
 
+        self.accum_states = []
+
         self.color = (random.randrange(256), random.randrange(256), random.randrange(256))
         self.track_id = track_id
+
+    def get_center(self):
+        center_pos = [self.X[0]-self.recent_shp[0]/2, self.X[1]-self.recent_shp[1]/2]
+
+        return center_pos
 
     def predict(self, fr, param):
         self.X = self.F @ self.X

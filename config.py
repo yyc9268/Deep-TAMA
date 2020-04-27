@@ -1,5 +1,5 @@
 
-class Config:
+class config:
     def __init__(self, fps):
         self.fps = fps
 

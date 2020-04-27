@@ -5,7 +5,7 @@ import cv2
 Collection of tools handling bounding-boxes
 """
 
-def NMS(orig_dets, iou_thresh):
+def nms(orig_dets, iou_thresh):
     """
     :param dets: [[x, y, w, h], ..., [x, y, w, h]]
     :return: keeping det indices
@@ -16,12 +16,12 @@ def NMS(orig_dets, iou_thresh):
     keep = [True]*len(dets)
     for i in range(0, len(dets)-1):
         for j in range(i+1, len(dets)):
-            if IOU(dets[i], dets[j]) > iou_thresh:
+            if iou(dets[i], dets[j]) > iou_thresh:
                 keep[j] = False
                 
     return keep
 
-def IOU(bb1, bb2):
+def iou(bb1, bb2):
     x1 = max(bb1[0], bb2[0])
     y1 = max(bb1[1], bb2[1])
     x2 = min(bb1[0]+bb1[2], bb2[0]+bb2[2])

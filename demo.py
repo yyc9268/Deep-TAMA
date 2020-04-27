@@ -1,8 +1,18 @@
 import os
 import time
-import dataLoader as ds
-from Config import Config
-from tracker import Track
+import data_loader as ds
+from config import config
+from main_tracker import track
+
+
+def track_write(trk_result, seq_name):
+    with open(os.path.join('results', seq_name, 'results.txt'), 'w') as file:
+        for fr, trk_in_fr in enumerate(trk_result):
+            for trk in trk_in_fr:
+                tmp_write = "{}, {}, {}, {}, {}, {}, {}, {}, {}".format(fr+1, trk[0], trk[1], trk[2],
+                                                                        trk[3], trk[4], -1, -1, -1, -1)
+                file.write(tmp_write)
+
 
 if __name__=="__main__":
 
@@ -28,19 +38,22 @@ if __name__=="__main__":
             seq_info[2] = new_fps
 
         # get tracking parameters
-        config = Config(seq_info[2])
+        _config = config(seq_info[2])
+        _config.det_thresh = 0.2
 
-        track = Track(seq_name, seq_info, config, visualization=False)
+        track = track(seq_name, seq_info, _config, visualization=False)
         fr_end = seq_info[-1]
 
         actual_fr = 0
+        st_time = time.time()
         for cur_fr in range(1, seq_info[-1]+1):
             if cur_fr > 1 and (cur_fr-1) % fr_intv != 0:
                 continue
             else:
                 actual_fr += 1
 
-            st_time = time.time()
             bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=cur_fr)
             track.track(bgr_img, dets, actual_fr)
-            print('{} Sec'.format(time.time()-st_time))
+
+        print('{} : {} Sec'.format(seq_name, (time.time()-st_time)/actual_fr))
+        track_write(track.trk_result, seq_name)

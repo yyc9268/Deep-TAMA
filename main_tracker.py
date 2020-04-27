@@ -3,11 +3,12 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 from copy import deepcopy
 import cv2
-from kalmanFilter import TrackState
-from Tools import IOU, NMS, normalization
-from TrainDeepDA import NeuralNet
+from track_state import trackState
+from tools import iou, nms, normalization
+from neural_net import neuralNet
 
-class Track:
+
+class track:
     def __init__(self, seq_name, seq_info, config, visualization=False):
         self.trk_result = []
         self.trk_state = []
@@ -21,7 +22,7 @@ class Track:
         self.fps = seq_info[2]
         self.config = config
         self.visualization = visualization
-        self.NN = NeuralNet(is_test=True)
+        self.NN = neuralNet(is_test=True)
 
     def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
@@ -86,7 +87,7 @@ class Track:
                         cur_idx += 1
 
                 # JI-Net based matching-feature extraction
-                feature_batch = self.NN.getFeature(input_templates)
+                feature_batch = self.NN.get_feature(input_templates)
 
                 # Create LSTM input batch
                 valid_matching_templates = [i for i in num_matching_templates if i>0]
@@ -102,7 +103,7 @@ class Track:
                         cur_idx += tmp_num
 
                 # Final appearance likelihood from Deep-TAMA
-                likelihoods = self.NN.getLikelihood(input_batch)
+                likelihoods = self.NN.get_likelihood(input_batch)
 
                 cur_idx = 0
                 for i in range(sim_mat.shape[0]):
@@ -145,7 +146,7 @@ class Track:
                     tmp_assoc = []
                     for hyp_ind, hyp in enumerate(prev_hyp):
                         # Hierarchical initialization
-                        if IOU(det, hyp) > self.config.assoc_iou_thresh:
+                        if iou(det, hyp) > self.config.assoc_iou_thresh:
                             is_assoc = True
                             tmp_assoc.append(hyp_ind)
                     if is_assoc:
@@ -178,7 +179,7 @@ class Track:
                     tmp_fr = fr_num - self.config.max_hyp_len + i
                     template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
                     if i == 0:
-                        tmp_state = TrackState(y, template, tmp_fr, self.max_id, self.config)
+                        tmp_state = trackState(y, template, tmp_fr, self.max_id, self.config)
                         self.max_id += 1
                     else:
                         tmp_state.predict(tmp_fr, self.config)
@@ -234,7 +235,7 @@ class Track:
             for i in range(dets.shape[0]):
                 dets[i][dets[i]<0] = 0
             dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
-            keep = NMS(dets, self.config.nms_iou_thresh)
+            keep = nms(dets, self.config.nms_iou_thresh)
             dets = dets[keep]
             dets = dets[dets[:, 5] > self.config.det_thresh].astype(int)
         else:
@@ -264,20 +265,18 @@ class Track:
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
                 if trk.recent_fr > fr_num - valid_miss_num:
-                    tmp_save.append(trk)
+                    tmp_state = [trk.track_id, trk.X[0], trk.X[1], trk.recent_shp[0], trk.recent_shp[1], trk.color]
+                    tmp_save.append(tmp_state)
 
         self.trk_result.append(tmp_save)
-
-    def track_write(self):
-        return NotImplementedError
 
     def track_visualization(self, bgr_img, fr_num):
         if len(self.trk_result[-1]) > 0:
             for trk in self.trk_result[-1]:
-                cv2.putText(bgr_img, str(trk.track_id), (int(trk.X[0]), int(trk.X[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
+                cv2.putText(bgr_img, str(trk[0]), (int(trk[1]), int(trk[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
                             trk.color, 2)
-                cv2.rectangle(bgr_img, (int(trk.X[0]), int(trk.X[2])), (int(trk.X[0] + trk.recent_shp[0]), int(trk.X[2] + trk.recent_shp[1])),
-                              trk.color, 3)
+                cv2.rectangle(bgr_img, (int(trk[1]), int(trk[2])), (int(trk[1] + trk[3]), int(trk[2] + trk[4])),
+                              trk[5], 3)
         if self.visualization:
             cv2.imshow('{}'.format(fr_num), bgr_img)
             cv2.waitKey(0)

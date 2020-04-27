@@ -5,7 +5,7 @@ import cv2
 import operator
 import json
 from copy import deepcopy
-from Tools import NMS, IOU, normalization
+from tools import nms, iou, normalization
 
 
 desktop_path = os.path.expanduser("~\Desktop")
@@ -188,7 +188,7 @@ class data():
 
         return img
 
-    def create_JINet_batch(self, batch_sz, train_val):
+    def create_jinet_batch(self, batch_sz, train_val):
         """
         Create training batch.
         """
@@ -284,7 +284,7 @@ class data():
 
         return img_batch, np.array(label_batch)
 
-    def create_LSTM_batch(self, max_trk_len, batch_sz, train_val):
+    def create_deeptama_batch(self, max_trk_len, batch_sz, train_val):
         """
         Create LSTM training batch
         """
@@ -437,10 +437,10 @@ class data():
 
         return img_batch, shp_batch, np.array(label_batch), track_len
 
-    def get_LSTM_batch(self, max_trk_length, batch_sz, train_val):
-        img_batch, shp_batch, label_batch, track_len = self.create_LSTM_batch(max_trk_length, batch_sz, train_val)
+    def get_deeptama_batch(self, max_trk_length, batch_sz, train_val):
+        img_batch, shp_batch, label_batch, track_len = self.create_deeptama_batch(max_trk_length, batch_sz, train_val)
         return img_batch, shp_batch, label_batch, track_len
 
-    def get_JINet_batch(self, batch_sz, train_val):
-        img_batch, label_batch = self.create_JINet_batch(batch_sz, train_val)
+    def get_jinet_batch(self, batch_sz, train_val):
+        img_batch, label_batch = self.create_jinet_batch(batch_sz, train_val)
         return img_batch, label_batch
