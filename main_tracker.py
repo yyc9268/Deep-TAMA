@@ -9,7 +9,7 @@ from neural_net import neuralNet
 
 
 class track:
-    def __init__(self, seq_name, seq_info, config, visualization=False):
+    def __init__(self, seq_name, seq_info, config, semi_on, fr_delay, visualization=False):
         self.trk_result = []
         self.trk_state = []
         self.hyp_dets = []
@@ -21,8 +21,11 @@ class track:
         self.img_shp = seq_info[0:2]
         self.fps = seq_info[2]
         self.config = config
-        self.visualization = visualization
         self.NN = neuralNet(is_test=True)
+
+        self.semi_on = semi_on
+        self.fr_delay = fr_delay
+        self.visualization = visualization
 
     def __del__(self):
         print("track deleted")
@@ -194,13 +197,19 @@ class track:
                     tmp_fr = fr_num - self.config.max_hyp_len + i
                     template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
                     if i == 0:
-                        tmp_state = trackState(y, template, tmp_fr, self.max_id, self.config)
+                        tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
                         self.max_id += 1
                     else:
-                        tmp_state.predict(tmp_fr, self.config)
-                        tmp_state.update(y, template, self.config.hist_thresh, tmp_fr, self.config)
+                        tmp_trk.predict(tmp_fr, self.config)
+                        tmp_trk.update(y, template, self.config.hist_thresh, tmp_fr, self.config)
 
-                self.trk_state.append(tmp_state)
+                    # Initialization hypothesis restoration (semi online mode only)
+                    if self.semi_on and i < self.config.max_hyp_len:
+                        tmp_state = [tmp_trk.track_id, tmp_trk.X[0][0], tmp_trk.X[2][0], tmp_trk.recent_shp[0],
+                                     tmp_trk.recent_shp[1], tmp_trk.color]
+                        self.trk_result[fr_num - (self.config.max_hyp_len-i) - 1].append(tmp_state)
+
+                self.trk_state.append(tmp_trk)
 
         else:
             self.hyp_dets.append([])
@@ -225,6 +234,9 @@ class track:
 
         # Track save
         self.track_save(fr_num)
+
+        # Track interpolation (semi online mode only)
+        self.track_interpolation(fr_num)
 
         # Track visualization
         self.track_visualization(bgr_img, fr_num)
@@ -273,6 +285,44 @@ class track:
                 else:
                     _tmp_trk.pop(0)
         return []
+
+    def track_interpolation(self, cur_fr):
+        # Interpolate holes within an each track
+        for anchor_trk in self.trk_result[-1]:
+            if cur_fr <= self.fr_delay:
+                continue
+
+            # Find same id in fr_delay range
+            found = False
+            found_i = 0
+            found_trk = None
+            i = 1
+            while not found and i <= self.fr_delay:
+                for refer_trk in self.trk_result[-1-i]:
+                    if refer_trk[0] == anchor_trk[0]:
+                        found = True
+                        found_i = i
+                        found_trk = refer_trk
+                        break
+                i += 1
+
+            # Make interpolation
+            if found and found_i > 1:
+                x_gap = (anchor_trk[1] - found_trk[1]) / found_i
+                y_gap = (anchor_trk[2] - found_trk[2]) / found_i
+                w_gap = (anchor_trk[3] - found_trk[3]) / found_i
+                h_gap = (anchor_trk[4] - found_trk[4]) / found_i
+                intp_trk = []
+                for i in range(1, found_i):
+                    tmp_trk = deepcopy(found_trk)
+                    tmp_trk[1] += i*x_gap
+                    tmp_trk[2] += i*y_gap
+                    tmp_trk[3] += i*w_gap
+                    tmp_trk[4] += i*h_gap
+                    intp_trk.append(tmp_trk)
+
+                for i in range(1, found_i):
+                    self.trk_result[-1-i].append(intp_trk[-i])
 
     def track_save(self, fr_num):
         tmp_save = []

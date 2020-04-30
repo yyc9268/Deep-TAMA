@@ -19,9 +19,11 @@ if __name__=="__main__":
     set_fps = True
     new_fps = 10
 
-    # Set the semi-online mode ON for better tracking performance
-    # Semi-online mode will lead to a delay of a few frames
-    semi_online = True
+    # Set the semi-online mode True for better tracking performance
+    # 1. Initialization hypotesis restoration
+    # 2. Track interpolation
+    # Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
+    semi_on = False
     fr_delay = 10
 
     seq_names = ["PETS09-S2L1", "MOT16-02"]
@@ -46,7 +48,7 @@ if __name__=="__main__":
         _config.det_thresh = 0.0
         print('thresh : {}, {}'.format(_config.assoc_iou_thresh, _config.assoc_dist_thresh))
 
-        _track = track(seq_name, seq_info, _config, visualization=False)
+        _track = track(seq_name, seq_info, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
         fr_end = seq_info[-1]
 
         actual_fr = 0

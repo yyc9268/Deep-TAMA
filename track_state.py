@@ -102,6 +102,16 @@ class trackState:
             self.historical_frs.append(self.recent_fr)
             self.historical_shps.append(self.recent_shp)
 
+    def get_shp_similarity(self, y):
+        if len(self.historical_shps) == 0:
+            pred_shp = self.recent_shp
+        else:
+            pred_shp = (lambda a, b, fr_diff: [(a[0]+b[0])/fr_diff, (a[1]+b[1])/fr_diff])\
+                (self.recent_shp, self.historical_shps[-1], self.recent_fr - self.historical_frs[-1])
+        shp_sim = np.exp(-0.5 * ((y[0]-pred_shp[0])/(y[0]+pred_shp[0]) + (y[1]-pred_shp[1])/(y[1]+pred_shp[1])))
+
+        return shp_sim
+
     def mahalanobis_distance(self, y):
         X = np.array([[self.X[0][0], self.X[2][0]]])
         Y = np.array([[y[0], y[1]]])

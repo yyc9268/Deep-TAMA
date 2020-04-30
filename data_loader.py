@@ -5,7 +5,7 @@ import cv2
 import operator
 import json
 from copy import deepcopy
-from tools import nms, iou, normalization
+from tools import normalization
 
 # Change this path to the users own dataset path
 desktop_path = os.path.expanduser("~\Desktop")
