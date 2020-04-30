@@ -7,7 +7,7 @@ import json
 from copy import deepcopy
 from tools import nms, iou, normalization
 
-
+# Change this path to the users own dataset path
 desktop_path = os.path.expanduser("~\Desktop")
 seq_path = os.path.join(desktop_path, "dataset", 'MOT')
 
@@ -199,6 +199,7 @@ class data():
         label_batch = []
 
         # Select train&test sequence indexes
+        all_name_set = np.array(self.seq_names)
         if train_val == "train":
             name_set = np.array(self.seq_names)[self.train_idxs]
             seq_info = np.array(self.seq_infos)[self.train_idxs]
@@ -206,7 +207,7 @@ class data():
             name_set = np.array(self.seq_names)[self.val_idxs]
             seq_info = np.array(self.seq_infos)[self.val_idxs]
 
-        seq_idxs = [np.where(name_set == name)[0][0] for name in name_set]
+        seq_idxs = [np.where(all_name_set == name)[0][0] for name in name_set]
 
         while collected_num < batch_sz:
             if collected_num % 100 == 0:
@@ -217,6 +218,7 @@ class data():
             seq_idx = seq_idxs[name_idx]
             id_list = self.id_lists[seq_idx]
             fr_rate = seq_info[name_idx][2]
+
             max_fr_diff = fr_rate * 3
 
             # Random anchor ID choice
@@ -289,6 +291,7 @@ class data():
         Create LSTM training batch
         """
 
+        all_name_set = np.array(self.seq_names)
         if train_val == "train":
             name_set = np.array(self.seq_names)[self.train_idxs]
             seq_info = np.array(self.seq_infos)[self.train_idxs]
@@ -296,7 +299,7 @@ class data():
             name_set = np.array(self.seq_names)[self.val_idxs]
             seq_info = np.array(self.seq_infos)[self.val_idxs]
 
-        seq_idxs = [np.where(name_set == name)[0][0] for name in name_set]
+        seq_idxs = [np.where(all_name_set == name)[0][0] for name in name_set]
 
         img_batch = np.zeros((batch_sz, max_trk_len, 128, 64, 6), dtype='float')
         shp_batch = np.zeros((batch_sz, max_trk_len, 3), dtype='float')

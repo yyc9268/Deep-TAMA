@@ -4,7 +4,7 @@ from scipy.optimize import linear_sum_assignment
 from copy import deepcopy
 import cv2
 from track_state import trackState
-from tools import iou, nms, normalization
+from tools import iou, nms, normalization, separate_measure
 from neural_net import neuralNet
 
 
@@ -23,6 +23,9 @@ class track:
         self.config = config
         self.visualization = visualization
         self.NN = neuralNet(is_test=True)
+
+    def __del__(self):
+        print("track deleted")
 
     def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
@@ -145,7 +148,7 @@ class track:
                     is_assoc = False
                     tmp_assoc = []
                     for hyp_ind, hyp in enumerate(prev_hyp):
-                        # Hierarchical initialization
+                        # Strict initialization
                         if iou(det, hyp) > self.config.assoc_iou_thresh:
                             is_assoc = True
                             tmp_assoc.append(hyp_ind)
@@ -154,6 +157,18 @@ class track:
                         tmp_hyp_dets.append(det)
                         tmp_hyp_valid.append(True)
                         tmp_hyp_assoc.append(tmp_assoc)
+                    else:
+                        for hyp_ind, hyp in enumerate(prev_hyp):
+                            # Weak initialization
+                            pos_dist, shp_dist = separate_measure(det, hyp)
+                            if pos_dist < det[3]*self.config.assoc_dist_thresh and shp_dist > self.config.assoc_shp_thresh:
+                                is_assoc = True
+                                tmp_assoc.append(hyp_ind)
+                        if is_assoc:
+                            dets_unassoc[det_ind] = False
+                            tmp_hyp_dets.append(det)
+                            tmp_hyp_valid.append(True)
+                            tmp_hyp_assoc.append(tmp_assoc)
 
             self.hyp_dets.append(tmp_hyp_dets)
             self.hyp_valid.append(tmp_hyp_valid)
@@ -265,7 +280,7 @@ class track:
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
                 if trk.recent_fr > fr_num - valid_miss_num:
-                    tmp_state = [trk.track_id, trk.X[0], trk.X[1], trk.recent_shp[0], trk.recent_shp[1], trk.color]
+                    tmp_state = [trk.track_id, trk.X[0][0], trk.X[2][0], trk.recent_shp[0], trk.recent_shp[1], trk.color]
                     tmp_save.append(tmp_state)
 
         self.trk_result.append(tmp_save)
@@ -274,7 +289,7 @@ class track:
         if len(self.trk_result[-1]) > 0:
             for trk in self.trk_result[-1]:
                 cv2.putText(bgr_img, str(trk[0]), (int(trk[1]), int(trk[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
-                            trk.color, 2)
+                            trk[5], 2)
                 cv2.rectangle(bgr_img, (int(trk[1]), int(trk[2])), (int(trk[1] + trk[3]), int(trk[2] + trk[4])),
                               trk[5], 3)
         if self.visualization:

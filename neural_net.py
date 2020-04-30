@@ -1,7 +1,6 @@
 from tensorflow.keras.models import Sequential, Model, load_model
 from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Conv2D, Flatten, MaxPool2D, BatchNormalization, Activation, Softmax
-from tensorflow.keras.callbacks import TensorBoard
-from tensorflow.keras.optimizers import SGD, Adam
+from tensorflow.keras.optimizers import SGD
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
@@ -76,7 +75,7 @@ class neuralNet:
     def train_jinet(self, train_batch_len=128, val_batch_len=128, total_epoch=1000):
         dataCls = dl.data(is_test=False)
 
-        val_x_batch, val_y_batch = dataCls.get_JINet_batch(2048, 'validation')
+        val_x_batch, val_y_batch = dataCls.get_jinet_batch(2048, 'validation')
 
         # Create validation batch
         val_idx = [i for i in range(len(val_x_batch))]
@@ -91,7 +90,7 @@ class neuralNet:
             acc_list = []
             for step in range(0, total_epoch+1, step_intv):
                 print("Train step : {}".format(step))
-                train_x_batch, train_y_batch = dataCls.get_JINet_batch(2048, 'train')
+                train_x_batch, train_y_batch = dataCls.get_jinet_batch(2048, 'train')
 
                 # Create training batch
                 train_idx = [i for i in range(len(train_x_batch))]
@@ -100,19 +99,19 @@ class neuralNet:
                 self.JINet.fit(train_x_batch[train_idx], train_y_batch[train_idx], batch_size=train_batch_len, epochs=step+step_intv, initial_epoch=step)
 
                 if step % 20 == 0:
-                    val_loss1, acc1 = self.JINet.evaluate(val_x_batch[val_idx], val_y_batch[val_idx], batch_size=val_batch_len)
-                    loss_list.append(val_loss1)
-                    acc_list.append(acc_list)
-                    plt.plot(, loss)
-                    plt.plot(step,)
-                    print('{}-step, val_loss : {}, acc : {}'.format(step, val_loss1, acc1))
-                    tf.summary.scalar('siamese validation loss', val_loss1, step=step)
+                    val_loss, acc = self.JINet.evaluate(val_x_batch[val_idx], val_y_batch[val_idx], batch_size=val_batch_len)
+                    loss_list.append(val_loss)
+                    acc_list.append(acc)
+                    self.draw_graph([i*20 for i in range(len(val_loss))], loss_list, acc_list, 'jinet')
+
+                    print('{}-step, val_loss : {}, acc : {}'.format(step, val_loss, acc))
+                    tf.summary.scalar('siamese validation loss', val_loss, step=step)
                     self.JINet.save(self._save_dir + '/JINet-model-{}.h5'.format(step))
 
     def train_lstm(self, train_batch_len=128, val_batch_len=128, total_epoch=240):
         dataCls = dl.data()
 
-        val_img_batch, val_shp_batch, val_label_batch, val_trk_len = dataCls.get_LSTM_batch(self.max_trk_len, 1024, 'validation')
+        val_img_batch, val_shp_batch, val_label_batch, val_trk_len = dataCls.get_deeptama_batch(self.max_trk_len, 1024, 'validation')
 
         # Create validation batch
         val_input_batch, val_idx = self.create_lstm_input(val_img_batch, val_shp_batch, val_trk_len)
@@ -123,9 +122,11 @@ class neuralNet:
             self.DeepTAMA.compile(loss=tf.keras.losses.categorical_crossentropy, optimizer=sgd, metrics=['accuracy'])
 
             step_intv = 4
+            loss_list = []
+            acc_list = []
             for step in range(0, total_epoch+1, step_intv):
                 print("Training step : {}".format(step))
-                train_img_batch, train_shp_batch, train_label_batch, train_trk_len = dataCls.get_LSTM_batch(self.max_trk_len, 1024, 'train')
+                train_img_batch, train_shp_batch, train_label_batch, train_trk_len = dataCls.get_deeptama_batch(self.max_trk_len, 1024, 'train')
 
                 # Create training batch
                 train_input_batch, train_idx = self.create_lstm_input(train_img_batch, train_shp_batch, train_trk_len)
@@ -134,8 +135,12 @@ class neuralNet:
                                   batch_size=train_batch_len, epochs=step+step_intv, initial_epoch=step)
 
                 if step % 20 == 0:
-                    val_loss1, acc1 = self.DeepTAMA.evaluate(val_input_batch[val_idx], val_label_batch[val_idx], batch_size=val_batch_len)
-                    tf.summary.scalar('validation loss', val_loss1, step=step)
+                    val_loss, acc = self.DeepTAMA.evaluate(val_input_batch[val_idx], val_label_batch[val_idx], batch_size=val_batch_len)
+                    loss_list.append(val_loss)
+                    acc_list.append(acc)
+                    self.draw_graph([i * 20 for i in range(len(val_loss))], loss_list, acc_list, 'jinet')
+
+                    tf.summary.scalar('validation loss', val_loss, step=step)
                     self.DeepTAMA.save(self._save_dir + '/DeepTAMA-model-{}.h5'.format(step))
 
     def create_lstm_input(self, img_batch, shp_batch, trk_len):
@@ -165,6 +170,17 @@ class neuralNet:
 
         return input_batch, shuffled_idx
 
+    def draw_graph(self, step_list, loss_list, acc_list, graph_name):
+        plt.figure(figsize=(10, 20))
+        plt.subplot(121)
+        plt.plot(step_list, loss_list)
+        plt.grid()
+        plt.subplot(122)
+        plt.plot(step_list, acc_list)
+        plt.grid()
+        plt.show()
+        plt.savefig(os.path.join(self._save_dir, '{}.png'.format(graph_name)))
+
     def get_jinet_likelihood(self, input_pair):
         likelihood = self.featureExtractor.predict(input_pair)
 
@@ -182,8 +198,8 @@ class neuralNet:
 
 
 def main():
-    # NN = NeuralNet(train_mode='JINet')
-    # NN.trainJINet()
+    #NN = neuralNet(train_mode='JINet')
+    #NN.train_jinet()
 
     NN = neuralNet(train_mode='LSTM')
     NN.train_lstm()

@@ -9,18 +9,22 @@ def track_write(trk_result, seq_name):
     with open(os.path.join('results', seq_name, 'results.txt'), 'w') as file:
         for fr, trk_in_fr in enumerate(trk_result):
             for trk in trk_in_fr:
-                tmp_write = "{}, {}, {}, {}, {}, {}, {}, {}, {}".format(fr+1, trk[0], trk[1], trk[2],
+                tmp_write = "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}\n".format(fr+1, trk[0], trk[1], trk[2],
                                                                         trk[3], trk[4], -1, -1, -1, -1)
                 file.write(tmp_write)
 
 
 if __name__=="__main__":
-
     # Manually set the FPS to simulate real-time tracking
     set_fps = True
     new_fps = 10
 
-    seq_names = ["MOT16-02"]
+    # Set the semi-online mode ON for better tracking performance
+    # Semi-online mode will lead to a delay of a few frames
+    semi_online = True
+    fr_delay = 10
+
+    seq_names = ["PETS09-S2L1", "MOT16-02"]
     data = ds.data(is_test=True)
 
     for seq_name in seq_names:
@@ -34,14 +38,15 @@ if __name__=="__main__":
 
         fr_intv = 1
         if set_fps:
-            fr_intv = int(seq_info[2]/new_fps)
-            seq_info[2] = new_fps
+            fr_intv = max(1, seq_info[2]/new_fps)
+            seq_info[2] = min(seq_info[2], new_fps)
 
         # get tracking parameters
         _config = config(seq_info[2])
-        _config.det_thresh = 0.2
+        _config.det_thresh = 0.0
+        print('thresh : {}, {}'.format(_config.assoc_iou_thresh, _config.assoc_dist_thresh))
 
-        track = track(seq_name, seq_info, _config, visualization=False)
+        _track = track(seq_name, seq_info, _config, visualization=False)
         fr_end = seq_info[-1]
 
         actual_fr = 0
@@ -53,7 +58,7 @@ if __name__=="__main__":
                 actual_fr += 1
 
             bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=cur_fr)
-            track.track(bgr_img, dets, actual_fr)
+            _track.track(bgr_img, dets, actual_fr)
 
         print('{} : {} Sec'.format(seq_name, (time.time()-st_time)/actual_fr))
-        track_write(track.trk_result, seq_name)
+        track_write(_track.trk_result, seq_name)
