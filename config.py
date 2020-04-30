@@ -15,7 +15,7 @@ class config:
         self.init_conf = 0.6
 
         # Historical appearance management parameters
-        self.hist_thresh = 0.7
+        self.hist_thresh = 0.6
         self.max_hist_len = 14
-        self.min_hist_intv = min(2, 0.2 * self.fps)
+        self.min_hist_intv = min(5, 0.2 * self.fps)
         self.max_hist_age = 2 * self.fps

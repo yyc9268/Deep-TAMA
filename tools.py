@@ -19,7 +19,6 @@ def nms(orig_dets, iou_thresh):
         for j in range(i+1, len(dets)):
             if iou(dets[i], dets[j]) > iou_thresh:
                 keep[j] = False
-    print(keep)
     return keep
 
 def iou(bb1, bb2):

@@ -9,7 +9,7 @@ from neural_net import neuralNet
 
 
 class track:
-    def __init__(self, seq_name, seq_info, config, semi_on, fr_delay, visualization=False):
+    def __init__(self, seq_name, seq_info, data, config, semi_on, fr_delay, visualization=False):
         self.trk_result = []
         self.trk_state = []
         self.hyp_dets = []
@@ -17,6 +17,7 @@ class track:
         self.hyp_assoc = []
         self.max_id = 1
 
+        self.data = data
         self.seq_name = seq_name
         self.img_shp = seq_info[0:2]
         self.fps = seq_info[2]
@@ -180,36 +181,43 @@ class track:
             # Init trk
             to_tracks = []
             if len(self.hyp_dets) > self.config.max_hyp_len:
-                for tail_assoc in self.hyp_assoc[-1]:
+                for tail_idx, tail_assoc in enumerate(self.hyp_assoc[-1]):
                     for tail_assoc_idx in tail_assoc:
                         tmp_trk = [tail_assoc_idx]
                         out_trk = self.recursive_find(self.config.max_hyp_len-1, tail_assoc_idx, tmp_trk)
                         if out_trk:
+                            out_trk.append(tail_idx)
                             tmp_to_track = []
                             for depth, hyp_idx in enumerate(out_trk):
                                 self.hyp_valid[depth][hyp_idx] = False
-                                tmp_to_track.insert(0, self.hyp_dets[depth][hyp_idx])
+                                tmp_to_track.append(self.hyp_dets[depth][hyp_idx])
                             to_tracks.append(tmp_to_track)
 
             # Recursively update trk
-            for to_track in to_tracks:
-                for i, y in enumerate(to_track):
-                    tmp_fr = fr_num - self.config.max_hyp_len + i
-                    template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
-                    if i == 0:
-                        tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
-                        self.max_id += 1
-                    else:
-                        tmp_trk.predict(tmp_fr, self.config)
-                        tmp_trk.update(y, template, self.config.hist_thresh, tmp_fr, self.config)
+            if len(to_tracks) > 0:
+                imgs = []
+                for tmp_fr_num in range(fr_num-self.config.max_hyp_len, fr_num):
+                    tmp_bgr_img, _ = self.data.get_frame_info(seq_name=self.seq_name, frame_num=tmp_fr_num)
+                    imgs.append(tmp_bgr_img)
+                imgs.append(bgr_img)
+                for to_track in to_tracks:
+                    for i, y in enumerate(to_track):
+                        tmp_fr = fr_num - self.config.max_hyp_len + i
+                        template = cv2.resize(imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
+                        if i == 0:
+                            tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
+                            self.max_id += 1
+                        else:
+                            tmp_trk.predict(tmp_fr, self.config)
+                            tmp_trk.update(y, template, self.config.hist_thresh, tmp_fr, self.config)
 
-                    # Initialization hypothesis restoration (semi online mode only)
-                    if self.semi_on and i < self.config.max_hyp_len:
-                        tmp_state = [tmp_trk.track_id, tmp_trk.X[0][0], tmp_trk.X[2][0], tmp_trk.recent_shp[0],
-                                     tmp_trk.recent_shp[1], tmp_trk.color]
-                        self.trk_result[fr_num - (self.config.max_hyp_len-i) - 1].append(tmp_state)
+                        # Initialization hypothesis restoration (semi online mode only)
+                        if self.semi_on and i < self.config.max_hyp_len:
+                            tmp_state = [tmp_trk.track_id, tmp_trk.X[0][0], tmp_trk.X[2][0], tmp_trk.recent_shp[0],
+                                         tmp_trk.recent_shp[1], tmp_trk.color]
+                            self.trk_result[fr_num - (self.config.max_hyp_len-i) - 1].append(tmp_state)
 
-                self.trk_state.append(tmp_trk)
+                    self.trk_state.append(tmp_trk)
 
         else:
             self.hyp_dets.append([])
@@ -236,10 +244,10 @@ class track:
         self.track_save(fr_num)
 
         # Track interpolation (semi online mode only)
-        self.track_interpolation(fr_num)
+        #self.track_interpolation(fr_num)
 
         # Track visualization
-        self.track_visualization(bgr_img, fr_num)
+        # self.track_visualization(bgr_img, fr_num)
 
         # Next frame prediction
         for trk in self.trk_state:
@@ -319,6 +327,7 @@ class track:
                     tmp_trk[2] += i*y_gap
                     tmp_trk[3] += i*w_gap
                     tmp_trk[4] += i*h_gap
+                    tmp_trk[5] = (0, 0, 0)
                     intp_trk.append(tmp_trk)
 
                 for i in range(1, found_i):

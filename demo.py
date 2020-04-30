@@ -3,15 +3,29 @@ import time
 import data_loader as ds
 from config import config
 from main_tracker import track
+import cv2
 
 
-def track_write(trk_result, seq_name):
+def track_write_result(trk_result, seq_name):
     with open(os.path.join('results', seq_name, 'results.txt'), 'w') as file:
         for fr, trk_in_fr in enumerate(trk_result):
             for trk in trk_in_fr:
                 tmp_write = "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}\n".format(fr+1, trk[0], trk[1], trk[2],
                                                                         trk[3], trk[4], -1, -1, -1, -1)
                 file.write(tmp_write)
+
+
+def track_write_image(trk_result, seq_name, data):
+    for fr_num in range(1, len(trk_result)+1):
+        bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=fr_num)
+        if len(trk_result[fr_num-1]) > 0:
+            for trk in trk_result[fr_num-1]:
+                cv2.putText(bgr_img, str(trk[0]), (int(trk[1]), int(trk[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
+                            trk[5], 2)
+                cv2.rectangle(bgr_img, (int(trk[1]), int(trk[2])), (int(trk[1] + trk[3]), int(trk[2] + trk[4])),
+                              trk[5], 3)
+
+        cv2.imwrite(os.path.join('results', seq_name, '{}.png'.format(fr_num)), bgr_img)
 
 
 if __name__=="__main__":
@@ -48,7 +62,7 @@ if __name__=="__main__":
         _config.det_thresh = 0.0
         print('thresh : {}, {}'.format(_config.assoc_iou_thresh, _config.assoc_dist_thresh))
 
-        _track = track(seq_name, seq_info, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
+        _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
         fr_end = seq_info[-1]
 
         actual_fr = 0
@@ -63,4 +77,5 @@ if __name__=="__main__":
             _track.track(bgr_img, dets, actual_fr)
 
         print('{} : {} Sec'.format(seq_name, (time.time()-st_time)/actual_fr))
-        track_write(_track.trk_result, seq_name)
+        track_write_result(_track.trk_result, seq_name)
+        track_write_image(_track.trk_result, seq_name, data)
