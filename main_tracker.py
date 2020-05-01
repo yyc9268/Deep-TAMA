@@ -31,7 +31,7 @@ class track:
     def __del__(self):
         print("track deleted")
 
-    def track(self, bgr_img, dets, fr_num):
+    def track(self, bgr_img, dets, fr_num, fr_list):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = self.det_preprocessing(dets, fr_num)
 
@@ -60,7 +60,7 @@ class track:
             num_matching_templates = []
             for i in range(sim_mat.shape[0]):
                 for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > self.config.assoc_thresh:
+                    if sim_mat[i, j] > self.config.gating_thresh:
                         num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
                     else:
                         num_matching_templates.append(0)
@@ -74,7 +74,7 @@ class track:
                 accum_num = 0
                 for i in range(sim_mat.shape[0]):
                     for j in range(sim_mat.shape[1]):
-                        if sim_mat[i, j] > self.config.assoc_thresh:
+                        if sim_mat[i, j] > self.config.gating_thresh:
                             matching_tmpls = []
                             matching_shps = []
                             anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
@@ -197,7 +197,7 @@ class track:
             if len(to_tracks) > 0:
                 imgs = []
                 for tmp_fr_num in range(fr_num-self.config.max_hyp_len, fr_num):
-                    tmp_bgr_img, _ = self.data.get_frame_info(seq_name=self.seq_name, frame_num=tmp_fr_num)
+                    tmp_bgr_img, _ = self.data.get_frame_info(seq_name=self.seq_name, frame_num=fr_list[tmp_fr_num-1])
                     imgs.append(tmp_bgr_img)
                 imgs.append(bgr_img)
                 for to_track in to_tracks:
@@ -244,7 +244,7 @@ class track:
         self.track_save(fr_num)
 
         # Track interpolation (semi online mode only)
-        #self.track_interpolation(fr_num)
+        self.track_interpolation(fr_num)
 
         # Track visualization
         # self.track_visualization(bgr_img, fr_num)

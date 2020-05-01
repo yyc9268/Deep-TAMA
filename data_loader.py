@@ -124,6 +124,9 @@ class data():
     def read_seq_info(self):
         seq_infos = []
         for seq_name in self.seq_names:
+            # Since MOT17 shares same sequences with MOT16
+            if "MOT17" in seq_name:
+                seq_name = "MOT16-"+seq_name.split('-')[1]
             # sequence info format [width, height, fps, total_frame_num]
             with open(os.path.join('sequence_infos', '{}.txt'.format(seq_name))) as seq_info_file:
                 line = seq_info_file.readline()
@@ -145,14 +148,17 @@ class data():
         """
         seq_idx = np.where(np.array(self.seq_names) == seq_name)[0][0]
         fr_list = self.fr_lists[seq_idx]
-        cur_fr_list = fr_list[frame_num-1]
+
         cur_img = self.read_bgr(seq_name, frame_num)
 
-        assert frame_num == cur_fr_list[0], "Frame number doesn't match!"
+        if frame_num >= len(fr_list):
+            return cur_img, np.array([])
+        else:
+            cur_fr_list = fr_list[frame_num-1]
+            assert frame_num == cur_fr_list[0], "Frame number doesn't match!"
+            return cur_img, np.array(cur_fr_list[1:])
 
-        return cur_img, np.array(cur_fr_list[1:])
-
-    def augment_bbox(self, bbox):
+    def augment_bbox(self, bbox, very_noisy=False):
         """
         Add gaussian noise on center location & width and height
         - center noise += widht/height * N(0, 0.1)
@@ -160,8 +166,12 @@ class data():
         :param bbox: [x, y, w, h]
         :return: augmented bounding-box
         """
-        loc_aug_ratio = np.random.normal(0, 0.05)
-        wh_aug_ratio = np.random.normal(1, 0.1)
+        if very_noisy:
+            loc_aug_ratio = np.random.normal(0, 0.1)
+            wh_aug_ratio = np.random.normal(1, 0.2)
+        else:
+            loc_aug_ratio = np.random.normal(0, 0.05)
+            wh_aug_ratio = np.random.normal(1, 0.1)
 
         augmented_bbox = deepcopy(bbox)
         augmented_bbox[0:2] += augmented_bbox[3:4] * loc_aug_ratio
@@ -263,7 +273,7 @@ class data():
             # Get RGB templates after applying random noise
             cropped_anchor, is_valid1 = self.get_cropped_template(seq_name, anchor_bb[0], self.augment_bbox(anchor_bb[1:5]))
             cropped_pos, is_valid2 = self.get_cropped_template(seq_name, pos_bb[0], self.augment_bbox(pos_bb[1:5]))
-            cropped_neg, is_valid3 = self.get_cropped_template(seq_name, neg_bb[0], self.augment_bbox(neg_bb[1:5]))
+            cropped_neg, is_valid3 = self.get_cropped_template(seq_name, neg_bb[0], self.augment_bbox(neg_bb[1:5], very_noisy = True))
 
             if not (is_valid1 and is_valid2 and is_valid3):
                 continue
@@ -271,11 +281,6 @@ class data():
             anchor_img = normalization(cropped_anchor)
             pos_img = normalization(cropped_pos)
             neg_img = normalization(cropped_neg)
-            """
-            if train_val == "train":
-                cv2.imshow('pairs', np.concatenate((anchor_img, pos_img, neg_img), 1))
-                cv2.waitKey(0)
-            """
 
             img_batch[collected_num, :, :, :] = np.concatenate((anchor_img, pos_img), 2)
             collected_num += 1
@@ -306,12 +311,12 @@ class data():
         label_batch = []
         track_len = []
 
-        min_len = 2
+        min_len = 1
         collected_num = 0
 
         while collected_num < batch_sz:
             if collected_num % 100 == 0:
-                print(collected_num)
+                print("collected : {}".format(collected_num))
 
             # Get an anchor sequence
             name_idx = random.choice(range(len(seq_idxs)))
@@ -370,8 +375,8 @@ class data():
 
             # Make batch
             anchor_det[1:5] = self.augment_bbox(anchor_det[1:5])
-            anchor_img, is_valid1 = self.get_cropped_template(seq_name, anchor_det[0], anchor_det)
-            neg_det[1:5] = self.augment_bbox(neg_det[1:5])
+            anchor_img, is_valid1 = self.get_cropped_template(seq_name, anchor_det[0], anchor_det[1:5])
+            neg_det[1:5] = self.augment_bbox(neg_det[1:5], very_noisy=True)
             neg_img, is_valid2 = self.get_cropped_template(seq_name, neg_det[0], neg_det[1:5])
 
             if not (is_valid1 and is_valid2):
@@ -393,10 +398,15 @@ class data():
 
             is_valid3 = True
 
-            for pos_det in pos_dets:
+            for idx, pos_det in enumerate(pos_dets):
                 pos_det = np.array(pos_det, dtype='float')
-                pos_det[1:5] = self.augment_bbox(pos_det[1:5])
-                pos_img, is_valid = self.get_cropped_template(seq_name, pos_det[0], pos_det)
+                if idx == len(pos_dets)-1:
+                    pos_det[1:5] = self.augment_bbox(pos_det[1:5], very_noisy=True)
+                else:
+                    pos_det[1:5] = self.augment_bbox(pos_det[1:5])
+
+                pos_img, is_valid = self.get_cropped_template(seq_name, pos_det[0], pos_det[1:5])
+
                 if not is_valid:
                     is_valid3 = False
                     break
@@ -408,9 +418,9 @@ class data():
 
                 pos_shp_diff[0] /= fr_rate
                 pos_shp_diff[1:3] /= anchor_shp[1:3]
-                neg_shp_diff = neg_shp - anchor_shp
+                neg_shp_diff = pos_shp - neg_shp
                 neg_shp_diff[0] /= fr_rate
-                neg_shp_diff[1:3] /= anchor_shp[1:3]
+                neg_shp_diff[1:3] /= neg_shp[1:3]
 
                 tmp_pos_img_batch = np.vstack(
                     (tmp_pos_img_batch, np.expand_dims(np.concatenate((pos_img, anchor_img), 2), 0)))
