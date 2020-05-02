@@ -334,7 +334,7 @@ class track:
                     tmp_trk[2] += i*y_gap
                     tmp_trk[3] += i*w_gap
                     tmp_trk[4] += i*h_gap
-                    tmp_trk[5] = (0, 0, 0)
+                    tmp_trk[5] = anchor_trk[5]
                     intp_trk.append(tmp_trk)
 
                 for i in range(1, found_i):

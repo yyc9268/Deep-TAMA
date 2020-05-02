@@ -54,6 +54,7 @@ if __name__=="__main__":
     data = ds.data(is_test=True)
 
     for seq_name in seq_names:
+        print("{}".format(seq_name))
         if not os.path.exists('results'):
             os.mkdir('results')
         if not os.path.exists(os.path.join('results', seq_name)):
@@ -69,12 +70,12 @@ if __name__=="__main__":
             fr_intv = math.ceil(seq_info[2]/new_fps)
             seq_info[2] = math.ceil(seq_info[2]/fr_intv)
 
-        print("fr_intv : {}, fps : {}".format(fr_intv, seq_info[2]))
+        print("frame interval : {}, fps : {}".format(fr_intv, seq_info[2]))
 
         # Get tracking parameters
         _config = config(seq_info[2])
         _config.det_thresh = 0.1
-        print('thresh : {}, {}'.format(_config.assoc_iou_thresh, _config.assoc_dist_thresh))
+        print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(_config.assoc_iou_thresh, _config.assoc_shp_thresh,_config.assoc_dist_thresh))
 
         _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
 
@@ -94,6 +95,6 @@ if __name__=="__main__":
             bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=actual_fr)
             _track.track(bgr_img, dets, cur_fr, fr_list)
 
-        print('{} : {} Sec'.format(seq_name, (time.time()-st_time)/cur_fr))
+        print('Average processing time : {} Sec/Frame'.format((time.time()-st_time)/cur_fr))
         track_write_result(_track, seq_name, fr_list)
         track_write_image(_track, seq_name, data, fr_list, trj_len=100)
