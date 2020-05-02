@@ -39,7 +39,7 @@ def track_write_image(trk_cls, _seq_name, _data, _fr_list, trj_len=1):
 
 if __name__=="__main__":
     # Manually set the FPS to simulate real-time tracking
-    set_fps = True
+    set_fps = False
     new_fps = 5
 
     # Set the semi-online mode True for better tracking performance
@@ -50,7 +50,7 @@ if __name__=="__main__":
     fr_delay = 10
 
     # Set the name of sequences for tracking
-    seq_names = ["MOT17-02-FRCNN"]
+    seq_names = ["TUD-Stadtmitte", "PETS09-S2L1", "ETH-Bahnhof", "KITTI-13", "MOT16-02", "ETH-Crossing"]
     data = ds.data(is_test=True)
 
     for seq_name in seq_names:
@@ -73,7 +73,7 @@ if __name__=="__main__":
 
         # Get tracking parameters
         _config = config(seq_info[2])
-        _config.det_thresh = 0.7
+        _config.det_thresh = 0.1
         print('thresh : {}, {}'.format(_config.assoc_iou_thresh, _config.assoc_dist_thresh))
 
         _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)

@@ -48,11 +48,6 @@ class trackState:
         self.color = (random.randrange(256), random.randrange(256), random.randrange(256))
         self.track_id = track_id
 
-    def get_center(self):
-        center_pos = [self.X[0]-self.recent_shp[0]/2, self.X[1]-self.recent_shp[1]/2]
-
-        return center_pos
-
     def predict(self, fr, param):
         self.X = self.F @ self.X
         self.P = self.F @ self.P @ np.transpose(self.F) + self.Q
@@ -94,6 +89,7 @@ class trackState:
         self.historical_app.pop(0)
         self.historical_conf.pop(0)
         self.historical_frs.pop(0)
+        self.historical_shps.pop(0)
 
     def add_recent_to_hist(self, param, fr):
         if (fr - self.recent_fr) >= param.min_hist_intv:
@@ -102,19 +98,32 @@ class trackState:
             self.historical_frs.append(self.recent_fr)
             self.historical_shps.append(self.recent_shp)
 
-    def get_shp_similarity(self, y):
+    def get_center(self, fr):
+        shp = self.get_shp(fr)
+        center_pos = [self.X[0][0]+shp[0]/2, self.X[2][0]+shp[1]/2]
+
+        return center_pos
+
+    def get_shp(self, fr):
+        # Get predicted shape
         if len(self.historical_shps) == 0:
             pred_shp = self.recent_shp
         else:
-            pred_shp = (lambda a, b, fr_diff: [(a[0]+b[0])/fr_diff, (a[1]+b[1])/fr_diff])\
+            intp_fr = fr - self.recent_fr
+            pred_shp = (lambda a, b, fr_diff: [a[0] + intp_fr*(a[0]-b[0])/fr_diff, a[1] + intp_fr*(a[1]-b[1])/fr_diff])\
                 (self.recent_shp, self.historical_shps[-1], self.recent_fr - self.historical_frs[-1])
-        shp_sim = np.exp(-0.5 * ((y[0]-pred_shp[0])/(y[0]+pred_shp[0]) + (y[1]-pred_shp[1])/(y[1]+pred_shp[1])))
+
+        return pred_shp
+
+    def get_shp_similarity(self, y, fr):
+        pred_shp = self.get_shp(fr)
+        shp_sim = np.exp(-1.5 * (abs(y[0]-pred_shp[0])/(y[0]+pred_shp[0]) + abs(y[1]-pred_shp[1])/(y[1]+pred_shp[1])))
 
         return shp_sim
 
-    def mahalanobis_distance(self, y):
-        X = np.array([[self.X[0][0], self.X[2][0]]])
-        Y = np.array([[y[0], y[1]]])
+    def mahalanobis_distance(self, y, fr):
+        X = self.get_center(fr)
+        X = np.array(X)
+        Y = np.array([[y[0]+y[2]/2, y[1]+y[3]/2]])
         d_squared = np.exp(-0.5 * (X-Y) @ np.linalg.inv(self.pos_var) @ (X-Y).T)
-
         return d_squared[0][0]

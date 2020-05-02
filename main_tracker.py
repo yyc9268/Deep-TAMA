@@ -47,20 +47,22 @@ class track:
                 det_templates[idx, :, :, :] = cv2.resize(cropped, (64, 128))
 
             # Construct a similarity matrix
+            gating_mat = np.zeros((len(dets), len(prev_trk)))
             sim_mat = np.zeros((len(dets), len(prev_trk)))
 
             # Motion similarity calculation
             for i, det in enumerate(dets):
                 for j, trk in enumerate(prev_trk):
-                    mot_sim = trk.mahalanobis_distance(det)
+                    mot_sim = trk.mahalanobis_distance(det, fr_num)
+                    gating_mat[i, j] = mot_sim * prev_trk[j].get_shp_similarity(dets[i][2:4], fr_num)
                     sim_mat[i, j] = mot_sim
 
             # Appearance similarity calculation
             # Pre-calculate the Neural-Net input shape to save the time
             num_matching_templates = []
-            for i in range(sim_mat.shape[0]):
-                for j in range(sim_mat.shape[1]):
-                    if sim_mat[i, j] > self.config.gating_thresh:
+            for i in range(gating_mat.shape[0]):
+                for j in range(gating_mat.shape[1]):
+                    if gating_mat[i, j] > self.config.gating_thresh:
                         num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
                     else:
                         num_matching_templates.append(0)
@@ -72,9 +74,9 @@ class track:
                 # Make input batch
                 cur_idx = 0
                 accum_num = 0
-                for i in range(sim_mat.shape[0]):
-                    for j in range(sim_mat.shape[1]):
-                        if sim_mat[i, j] > self.config.gating_thresh:
+                for i in range(gating_mat.shape[0]):
+                    for j in range(gating_mat.shape[1]):
+                        if gating_mat[i, j] > self.config.gating_thresh:
                             matching_tmpls = []
                             matching_shps = []
                             anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
@@ -97,9 +99,9 @@ class track:
                 feature_batch = self.NN.get_feature(input_templates)
 
                 # Create LSTM input batch
-                valid_matching_templates = [i for i in num_matching_templates if i>0]
+                valid_matching_templates = [i for i in num_matching_templates if i > 0]
 
-                input_batch = np.zeros((sum(num_matching_templates), self.config.max_hist_len+1, 150+3,))
+                input_batch = np.zeros((sum(num_matching_templates), self.config.max_hist_len+1, 150+3))
                 cur_idx = 0
 
                 for idx, tmp_num in enumerate(valid_matching_templates):
@@ -113,9 +115,14 @@ class track:
                 likelihoods = self.NN.get_likelihood(input_batch)
 
                 cur_idx = 0
-                for i in range(sim_mat.shape[0]):
-                    for j in range(sim_mat.shape[1]):
-                        if sim_mat[i, j] > self.config.assoc_thresh:
+                for i in range(gating_mat.shape[0]):
+                    for j in range(gating_mat.shape[1]):
+                        if gating_mat[i, j] > self.config.gating_thresh:
+                            #y = dets[i]
+                            #template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]: y[0] + y[2]], (64, 128))
+                            #print('geo : {}, app : {}'.format(sim_mat[i,j], likelihoods[cur_idx][0]))
+                            #cv2.imshow('tmp', np.hstack((template, self.trk_state[j].recent_app)))
+                            #cv2.waitKey(0)
                             sim_mat[i, j] *= likelihoods[cur_idx][0]
                             cur_idx += 1
 
@@ -268,7 +275,7 @@ class track:
         if len(dets) > 0:
             dets = dets[:, 1:6]
             for i in range(dets.shape[0]):
-                dets[i][dets[i]<0] = 0
+                dets[i][dets[i] < 0] = 0
             dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
             keep = nms(dets, self.config.nms_iou_thresh)
             dets = dets[keep]
@@ -339,7 +346,7 @@ class track:
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
                 if trk.recent_fr > fr_num - valid_miss_num:
-                    tmp_state = [trk.track_id, trk.X[0][0], trk.X[2][0], trk.recent_shp[0], trk.recent_shp[1], trk.color]
+                    tmp_state = [trk.track_id, trk.X[0][0], trk.X[2][0], trk.get_shp(fr_num)[0], trk.get_shp(fr_num)[1], trk.color]
                     tmp_save.append(tmp_state)
 
         self.trk_result.append(tmp_save)
