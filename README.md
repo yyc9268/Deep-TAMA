@@ -6,8 +6,8 @@ We are almost done and catching minor bugs!
 
 Please wait til 5.3 (Sun) for a better tracker code. Sorry.
 
-![PETS_results](https://https://github.com/yyc9268/Deep-TAMA/tree/master/images/PETS_results.gif)
-![Stadtmitte_results](https://https://github.com/yyc9268/Deep-TAMA/tree/master/images/Stadtmitte_results.gif)
+![PETS_results](https://github.com/yyc9268/Deep-TAMA/blob/master/images/PETS_results.gif)
+![Stadtmitte_results](https://github.com/yyc9268/Deep-TAMA/blob/master/images/Stadtmitte_results.gif)
 
 ## Enviroment
     OS : Windows10 64bit
