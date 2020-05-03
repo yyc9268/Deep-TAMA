@@ -21,7 +21,7 @@ We are struggling to debug and arrange the code.
 }
 @inproceedings{ycyoon2019,
   title={Real-time Multiple People Tracking with Deeply Learned Candidate Selection and Person Re-identification},
-  author={Young-Chul Yoon and Abhijeet Boragule and Young-min Song and Kwangjin Yoon and Moongu Jeon},
+  author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
   year={2019},
   booktitle={arXiv:1907.00831}
 }
