@@ -27,7 +27,7 @@ We are struggling to debug and arrange the code.
 }
 ```
 
-![cvpr_award](https://github.com/yyc9268/Deep-TAMA/blob/master/images/cvpr_award)
+![cvpr_award](https://github.com/yyc9268/Deep-TAMA/blob/master/images/cvpr_award.jpg)
 
 This tracker was awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held in CVPR 2019
 
