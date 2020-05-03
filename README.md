@@ -1,7 +1,9 @@
 # Deep-TAMA
 
-![PETS_results](https://github.com/yyc9268/Deep-TAMA/blob/master/images/PETS_results.gif)
-![Stadtmitte_results](https://github.com/yyc9268/Deep-TAMA/blob/master/images/Stadtmitte_results.gif)
+<p float="left">
+  <img src="/images/PETS_results.gif" height="300"> 
+  <img src="/images/Stadtmitte_results.gif" height="300">
+</p>
 
 ## Important !!!
 
@@ -27,9 +29,9 @@ We are struggling to debug and arrange the code.
 }
 ```
 
-![cvpr_award](https://github.com/yyc9268/Deep-TAMA/blob/master/images/cvpr_award.jpg)
+<img src="/images/cvpr_award.jpg" height="400">
 
-This tracker was awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held in CVPR 2019
+This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held in CVPR 2019
 
 ## Enviroment
     OS : Windows10 64bit
