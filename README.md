@@ -16,13 +16,13 @@ We are struggling to debug and arrange the code.
 
 ```
 @inproceedings{ycyoon2018,
-  title={Real-time Multiple People Tracking with Deeply Learned Candidate Selection and Person Re-identification},
+  title={Online Multi-Object Tracking with Historical Appearance Matching and Scene Adaptive Detection Filtering},
   author={Young-Chul Yoon and Abhijeet Boragule and Young-min Song and Kwangjin Yoon and Moongu Jeon},
   year={2018},
-  booktitle={AVSS}
+  booktitle={IEEE AVSS}
 }
 @inproceedings{ycyoon2019,
-  title={Real-time Multiple People Tracking with Deeply Learned Candidate Selection and Person Re-identification},
+  title={Online Multiple Pedestrian Tracking using Deep Temporal Appearance Matching Association},
   author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
   year={2019},
   booktitle={arXiv:1907.00831}
