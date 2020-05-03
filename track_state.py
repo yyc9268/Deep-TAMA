@@ -12,9 +12,9 @@ class trackState:
         self.X = np.array([[init_y[0]],  [0], [init_y[1]], [0]])
 
         # state transition matrix
-        self.Ts = 1 # frame rates
+        self.Ts = 1
         self.F1 = np.array([[1, self.Ts], [0, 1]])
-        self.Fz = np.zeros((2,2))
+        self.Fz = np.zeros((2, 2))
         self.F = np.concatenate((np.concatenate((self.F1, self.Fz), 1),
                                  np.concatenate((self.Fz, self.F1), 1)), 0)
 

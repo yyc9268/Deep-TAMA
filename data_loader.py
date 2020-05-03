@@ -130,7 +130,7 @@ class data():
             # sequence info format [width, height, fps, total_frame_num]
             with open(os.path.join('sequence_infos', '{}.txt'.format(seq_name))) as seq_info_file:
                 line = seq_info_file.readline()
-                seq_infos.append(list(map(int, line.split(','))))
+                seq_infos.append(list(map(float, line.split(','))))
 
         return seq_infos
 

@@ -50,7 +50,8 @@ if __name__=="__main__":
     fr_delay = 10
 
     # Set the name of sequences for tracking
-    seq_names = ["TUD-Stadtmitte", "PETS09-S2L1", "ETH-Bahnhof", "KITTI-13", "MOT16-02", "ETH-Crossing"]
+    #seq_names = ["TUD-Stadtmitte", "PETS09-S2L1", "ETH-Bahnhof", "KITTI-13", "MOT16-02", "ETH-Crossing"]
+    seq_names = ["AVG-TownCentre"]
     data = ds.data(is_test=True)
 
     for seq_name in seq_names:
@@ -63,10 +64,9 @@ if __name__=="__main__":
         # Get sequence info
         seq_info = data.get_seq_info(seq_name=seq_name)
 
-        assert seq_info[2] >= new_fps, "new FPS should be equal or smaller than original FPS"
-
         fr_intv = 1
         if set_fps:
+            assert seq_info[2] >= new_fps, "new FPS should be equal or smaller than original FPS"
             fr_intv = math.ceil(seq_info[2]/new_fps)
             seq_info[2] = math.ceil(seq_info[2]/fr_intv)
 
@@ -86,7 +86,7 @@ if __name__=="__main__":
         fr_list = []
         cur_fr = 0
         st_time = time.time()
-        for actual_fr in range(1, seq_info[-1]+1):
+        for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
                 continue
             else:
