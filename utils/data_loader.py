@@ -12,9 +12,11 @@ seq_path = os.path.join(desktop_path, "dataset", 'MOT')
 
 
 class data():
-    def __init__(self, is_test=False):
+    def __init__(self, is_test=False, seq_names=[]):
+        if is_test:
+            assert len(seq_names) > 0, "You should set the seq_lists during test"
         # Read sequence name and info
-        self.seq_names, self.train_idxs, self.val_idxs = self.read_seq_names(is_test)
+        self.seq_names, self.train_idxs, self.val_idxs = self.read_seq_names(is_test, seq_lists=seq_names)
         self.seq_infos = self.read_seq_info()
 
         # Create lists for training
@@ -104,15 +106,16 @@ class data():
 
         return id_lists
 
-    def read_seq_names(self, is_test):
+    def read_seq_names(self, is_test, seq_lists = []):
         seq_names = []
         train_idxs = []
         val_idxs = []
-        with open(os.path.join('sequence_groups', 'group1.json')) as json_file:
-            json_data = json.load(json_file)
-            if is_test:
-                seq_names = json_data['test']
-            else:
+        if is_test:
+            seq_names = seq_lists
+        else:
+            with open(os.path.join('sequence_groups', 'trainval_group.json')) as json_file:
+                json_data = json.load(json_file)
+
                 seq_names.extend(json_data['train'])
                 seq_names.extend(json_data['validation'])
                 train_idxs = [i for i in range(len(json_data['train']))]

@@ -7,6 +7,9 @@ import cv2
 import math
 
 
+seqlist_path = "sequence_groups"
+
+
 def track_write_result(trk_cls, _seq_name, _fr_list):
     with open(os.path.join('results', _seq_name, 'results.txt'), 'w') as file:
         for fr, trk_in_fr in enumerate(trk_cls.trk_result):
@@ -50,12 +53,23 @@ if __name__=="__main__":
     fr_delay = 10
 
     # Set the name of sequences for tracking
-    # seq_names = ["TUD-Stadtmitte", "PETS09-S2L1", "ETH-Bahnhof", "KITTI-13", "MOT16-02", "ETH-Crossing"]
-    seq_names = ["AVG-TownCentre"]
-    data = ds.data(is_test=True)
+    seqlist_name = "seq_list1.txt"
+    seq_file_path = os.path.join(seqlist_path, seqlist_name)
+    lines = [line.rstrip('\n').split(' ') for line in open(seq_file_path) if len(line) > 1]
+    seq_names = []
+    det_threshes = []
+    for line in lines:
+        seq_names.append(line[0])
+        det_threshes.append(float(line[1]))
 
-    for seq_name in seq_names:
-        print("{}".format(seq_name))
+    print(seq_names)
+    print(det_threshes)
+
+    data = ds.data(is_test=True, seq_names=seq_names)
+
+    tot_fr = 0
+    tot_time = 0
+    for idx, seq_name in enumerate(seq_names):
         if not os.path.exists('results'):
             os.mkdir('results')
         if not os.path.exists(os.path.join('results', seq_name)):
@@ -70,14 +84,16 @@ if __name__=="__main__":
             fr_intv = math.ceil(seq_info[2]/new_fps)
             seq_info[2] = math.ceil(seq_info[2]/fr_intv)
 
-        print("frame interval : {}, fps : {}".format(fr_intv, seq_info[2]))
-
         # Get tracking parameters
         _config = config(seq_info[2])
-        _config.det_thresh = 0.1
-        print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(_config.assoc_iou_thresh, _config.assoc_shp_thresh,_config.assoc_dist_thresh))
+        _config.det_thresh = det_threshes[idx]
 
         _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
+
+        print("{}".format(seq_name))
+        print("frame interval : {}, fps : {}".format(fr_intv, seq_info[2]))
+        print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(_config.assoc_iou_thresh, _config.assoc_shp_thresh,
+                                                                    _config.assoc_dist_thresh))
 
         # Start tracking
         # cur_fr : sequential frame number [1, 2, 3, ....]
@@ -95,6 +111,11 @@ if __name__=="__main__":
             bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=actual_fr)
             _track.track(bgr_img, dets, cur_fr, fr_list)
 
-        print('Average processing time : {} Sec/Frame'.format((time.time()-st_time)/cur_fr))
+        tot_fr += cur_fr
+        cur_time = time.time()-st_time
+        tot_time += cur_time
+        print('Average processing time : {} Sec/Frame'.format(cur_time/cur_fr))
         track_write_result(_track, seq_name, fr_list)
-        track_write_image(_track, seq_name, data, fr_list, trj_len=100)
+        #track_write_image(_track, seq_name, data, fr_list, trj_len=100)
+
+    print('Total average processing time : {} Sec/Frame'.format(tot_time / tot_fr))
