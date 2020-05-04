@@ -4,10 +4,9 @@ import random
 
 class trackState:
     """
-    Track with Kalman filtering
+    Track with Kalman filtering & Historical appearance management
     """
     def __init__(self, init_y, init_app, init_fr, track_id, param):
-
         # init_y : [x, y, w, h, conf, fr]
         self.X = np.array([[init_y[0]],  [0], [init_y[1]], [0]])
 

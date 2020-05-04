@@ -4,8 +4,7 @@ import random
 import cv2
 import operator
 import json
-from copy import deepcopy
-from tools import normalization
+from utils.tools import normalization, augment_bbox
 
 # Change this path to the users own dataset path
 desktop_path = os.path.expanduser("~\Desktop")
@@ -158,27 +157,6 @@ class data():
             assert frame_num == cur_fr_list[0], "Frame number doesn't match!"
             return cur_img, np.array(cur_fr_list[1:])
 
-    def augment_bbox(self, bbox, very_noisy=False):
-        """
-        Add gaussian noise on center location & width and height
-        - center noise += widht/height * N(0, 0.1)
-        - width/height *= N(1, 0.1)
-        :param bbox: [x, y, w, h]
-        :return: augmented bounding-box
-        """
-        if very_noisy:
-            loc_aug_ratio = np.random.normal(0, 0.1)
-            wh_aug_ratio = np.random.normal(1, 0.2)
-        else:
-            loc_aug_ratio = np.random.normal(0, 0.05)
-            wh_aug_ratio = np.random.normal(1, 0.1)
-
-        augmented_bbox = deepcopy(bbox)
-        augmented_bbox[0:2] += augmented_bbox[3:4] * loc_aug_ratio
-        augmented_bbox[2:4] *= wh_aug_ratio
-
-        return augmented_bbox
-
     def get_cropped_template(self, seq_name, fr, bbox):
         img = self.read_bgr(seq_name, fr)
         template = img[max(0, int(bbox[1])):min(img.shape[0], int(bbox[1]) + int(bbox[3])),
@@ -271,9 +249,9 @@ class data():
             neg_bb = np.array(neg_track[neg_bb_idx], dtype='float')
 
             # Get RGB templates after applying random noise
-            cropped_anchor, is_valid1 = self.get_cropped_template(seq_name, anchor_bb[0], self.augment_bbox(anchor_bb[1:5]))
-            cropped_pos, is_valid2 = self.get_cropped_template(seq_name, pos_bb[0], self.augment_bbox(pos_bb[1:5]))
-            cropped_neg, is_valid3 = self.get_cropped_template(seq_name, neg_bb[0], self.augment_bbox(neg_bb[1:5], very_noisy = True))
+            cropped_anchor, is_valid1 = self.get_cropped_template(seq_name, anchor_bb[0], augment_bbox(anchor_bb[1:5]))
+            cropped_pos, is_valid2 = self.get_cropped_template(seq_name, pos_bb[0], augment_bbox(pos_bb[1:5]))
+            cropped_neg, is_valid3 = self.get_cropped_template(seq_name, neg_bb[0], augment_bbox(neg_bb[1:5], very_noisy = True))
 
             if not (is_valid1 and is_valid2 and is_valid3):
                 continue
@@ -374,9 +352,9 @@ class data():
             neg_det = np.array(neg_det, dtype='float')
 
             # Make batch
-            anchor_det[1:5] = self.augment_bbox(anchor_det[1:5])
+            anchor_det[1:5] = augment_bbox(anchor_det[1:5])
             anchor_img, is_valid1 = self.get_cropped_template(seq_name, anchor_det[0], anchor_det[1:5])
-            neg_det[1:5] = self.augment_bbox(neg_det[1:5], very_noisy=True)
+            neg_det[1:5] = augment_bbox(neg_det[1:5], very_noisy=True)
             neg_img, is_valid2 = self.get_cropped_template(seq_name, neg_det[0], neg_det[1:5])
 
             if not (is_valid1 and is_valid2):
@@ -401,9 +379,9 @@ class data():
             for idx, pos_det in enumerate(pos_dets):
                 pos_det = np.array(pos_det, dtype='float')
                 if idx == len(pos_dets)-1:
-                    pos_det[1:5] = self.augment_bbox(pos_det[1:5], very_noisy=True)
+                    pos_det[1:5] = augment_bbox(pos_det[1:5], very_noisy=True)
                 else:
-                    pos_det[1:5] = self.augment_bbox(pos_det[1:5])
+                    pos_det[1:5] = augment_bbox(pos_det[1:5])
 
                 pos_img, is_valid = self.get_cropped_template(seq_name, pos_det[0], pos_det[1:5])
 

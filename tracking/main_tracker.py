@@ -3,9 +3,9 @@ import numpy as np
 from scipy.optimize import linear_sum_assignment
 from copy import deepcopy
 import cv2
-from track_state import trackState
-from tools import iou, nms, normalization, separate_measure
-from neural_net import neuralNet
+from tracking.track_state import trackState
+from utils.tools import iou, nms, normalization, separate_measure
+from dnn.neural_net import neuralNet
 
 
 class track:

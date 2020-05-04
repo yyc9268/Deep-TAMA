@@ -1,6 +1,7 @@
 import copy
 import cv2
 import math
+import numpy as np
 
 """
 Collection of tools handling bounding-boxes
@@ -51,3 +52,25 @@ def normalization(img):
     norm_img = cv2.normalize(img, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
 
     return norm_img
+
+
+def augment_bbox(bbox, very_noisy=False):
+    """
+    Add gaussian noise on center location & width and height
+    - center noise += widht/height * N(0, 0.1)
+    - width/height *= N(1, 0.1)
+    :param bbox: [x, y, w, h]
+    :return: augmented bounding-box
+    """
+    if very_noisy:
+        loc_aug_ratio = np.random.normal(0, 0.1)
+        wh_aug_ratio = np.random.normal(1, 0.2)
+    else:
+        loc_aug_ratio = np.random.normal(0, 0.05)
+        wh_aug_ratio = np.random.normal(1, 0.1)
+
+    augmented_bbox = copy.deepcopy(bbox)
+    augmented_bbox[0:2] += augmented_bbox[3:4] * loc_aug_ratio
+    augmented_bbox[2:4] *= wh_aug_ratio
+
+    return augmented_bbox

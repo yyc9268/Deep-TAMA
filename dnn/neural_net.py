@@ -1,16 +1,15 @@
-from tensorflow.keras.models import Sequential, Model, load_model
+from tensorflow.keras.models import Model, load_model
 from tensorflow.keras.layers import Dense, RNN, LSTMCell, Input, Conv2D, Flatten, MaxPool2D, BatchNormalization, Activation, Softmax
 from tensorflow.keras.optimizers import SGD
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-import data_loader as dl
+from utils import data_loader as dl
 import os
 import random
 
 
 class neuralNet:
-
     def __init__(self, is_test=False, max_trk_len=15, train_mode='None'):
         self.max_sequence_len = 0
         self.max_trk_len = max_trk_len

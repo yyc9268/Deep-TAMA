@@ -1,4 +1,4 @@
-from neural_net import neuralNet
+from dnn.neural_net import neuralNet
 
 
 def main():

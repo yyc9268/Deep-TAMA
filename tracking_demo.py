@@ -1,8 +1,8 @@
 import os
 import time
-import data_loader as ds
-from config import config
-from main_tracker import track
+from utils import data_loader as ds
+from tracking.config import config
+from tracking.main_tracker import track
 import cv2
 import math
 
@@ -50,7 +50,7 @@ if __name__=="__main__":
     fr_delay = 10
 
     # Set the name of sequences for tracking
-    #seq_names = ["TUD-Stadtmitte", "PETS09-S2L1", "ETH-Bahnhof", "KITTI-13", "MOT16-02", "ETH-Crossing"]
+    # seq_names = ["TUD-Stadtmitte", "PETS09-S2L1", "ETH-Bahnhof", "KITTI-13", "MOT16-02", "ETH-Crossing"]
     seq_names = ["AVG-TownCentre"]
     data = ds.data(is_test=True)
 
