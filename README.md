@@ -69,6 +69,11 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
 >> - JI-Net training should be performed first.
 >> - Using pre-trained JI-Net model, LSTM can be trained.
 
+## Evaluation
+- The evaluation tool should be manually set by the users.
+>> - We recommend to use the [Matlab](https://bitbucket.org/amilan/motchallenge-devkit/src/default/) or [Python](https://github.com/cheind/py-motmetrics) evaluation tools.
+>> - The code produces tracking results in both txt and image format.
+
 ## Pre-trained models
     JI-Net : https://drive.google.com/open?id=1Xz1zEjshvPIZqi0K7WOrZOVQZ8lbQvuf
     LSTM : https://drive.google.com/open?id=1lETIh-5seYzdXEpy4WZj8Z9JPx4Fvuc3
