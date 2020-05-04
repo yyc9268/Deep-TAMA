@@ -45,8 +45,26 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
     numpy 1.17.3
     opencv 3.4.2
     matplotlib 3.1.1
-    scikit-learn 0.22.1 
+    scikit-learn 0.22.1
     
+## Sample tracking dataset structure
+    - Set the dataset folder as following structure
+     
+     MOT
+      |__ TUD-Stadtmitte
+      |         |__ det
+      |         |__ gt
+      |         |__ img1
+      |
+      |__ MOT16-02
+      |
+      |__ Custom_Seuqnce
+      .
+      .
+      .
+      
+    - We recommend to copy-and-paste all MOTChallenge sequences in MOT folder
+      
 ## Tracking settings
 1. Download the pre-trained models and locate in in model directory.
 
@@ -56,7 +74,11 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
 >> - The simplest way is just copy and paste all MOTChallenge datasets (2DMOT2015, MOT16, MOT16, MOT20, etc) in 'MOT' folder.
 >> - The compatible datasets are available on [MOTChallenge](https://motchallenge.net/).
 
-3. Perform tracking using 'tracking_demo.py'.
+3. Set the variable 'seqlist_name' in 'tracking_demo.py' to the proper name.
+>> - We have already set some sequence groups to test the tracker.
+>> - Add your own tracking sequence group in 'sequence_groups'.
+
+4. Perform tracking using 'tracking_demo.py'.
 >> - tracking thresholds can be controlled by modifying 'config.py'.
 >> - There exist two mode on-off variables in 'tracking_demo.py'.
 >> - 'set_fps' can lower the FPS of the video which is for test on real-time application.
@@ -65,7 +87,10 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
 ## Training settings
 1. Set the data as same as Tracking settings above.
 
-2. Perform training using 'training_demo.py'.
+2. Modify the 'sequence_groups/trainval_group.json' to your own dataset
+>> - Note that training and validation dataset should contain 'gt' folder.
+
+3. Perform training using 'training_demo.py'.
 >> - JI-Net training should be performed first.
 >> - Using pre-trained JI-Net model, LSTM can be trained.
 
