@@ -4,6 +4,7 @@ import random
 import cv2
 import operator
 import json
+import time
 from utils.tools import normalization, augment_bbox
 
 # Change this path to the users own dataset path
@@ -106,7 +107,7 @@ class data():
 
         return id_lists
 
-    def read_seq_names(self, is_test, seq_lists = []):
+    def read_seq_names(self, is_test, seq_lists=[]):
         seq_names = []
         train_idxs = []
         val_idxs = []
@@ -153,7 +154,7 @@ class data():
 
         cur_img = self.read_bgr(seq_name, frame_num)
 
-        if frame_num >= len(fr_list):
+        if frame_num > len(fr_list):
             return cur_img, np.array([])
         else:
             cur_fr_list = fr_list[frame_num-1]

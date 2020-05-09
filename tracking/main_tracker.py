@@ -10,6 +10,9 @@ from dnn.neural_net import neuralNet
 
 class track:
     def __init__(self, seq_name, seq_info, data, config, semi_on, fr_delay, visualization=False):
+        # Save recent 5-images to save the processing time of new hyp init
+        self.imgs = []
+
         self.trk_result = []
         self.trk_state = []
         self.hyp_dets = []
@@ -31,9 +34,13 @@ class track:
     def __del__(self):
         print("track deleted")
 
-    def track(self, bgr_img, dets, fr_num, fr_list):
+    def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = self.det_preprocessing(dets, fr_num)
+
+        if len(self.imgs) > self.config.max_hyp_len:
+            self.imgs.pop(0)
+        self.imgs.append(bgr_img)
 
         # Track-detection association
         prev_trk = deepcopy(self.trk_state)
@@ -118,11 +125,6 @@ class track:
                 for i in range(gating_mat.shape[0]):
                     for j in range(gating_mat.shape[1]):
                         if gating_mat[i, j] > self.config.gating_thresh:
-                            #y = dets[i]
-                            #template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]: y[0] + y[2]], (64, 128))
-                            #print('geo : {}, app : {}'.format(sim_mat[i,j], likelihoods[cur_idx][0]))
-                            #cv2.imshow('tmp', np.hstack((template, self.trk_state[j].recent_app)))
-                            #cv2.waitKey(0)
                             sim_mat[i, j] *= likelihoods[cur_idx][0]
                             cur_idx += 1
 
@@ -202,21 +204,16 @@ class track:
 
             # Recursively update trk
             if len(to_tracks) > 0:
-                imgs = []
-                for tmp_fr_num in range(fr_num-self.config.max_hyp_len, fr_num):
-                    tmp_bgr_img, _ = self.data.get_frame_info(seq_name=self.seq_name, frame_num=fr_list[tmp_fr_num-1])
-                    imgs.append(tmp_bgr_img)
-                imgs.append(bgr_img)
                 for to_track in to_tracks:
                     for i, y in enumerate(to_track):
                         tmp_fr = fr_num - self.config.max_hyp_len + i
-                        template = cv2.resize(imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
+                        template = cv2.resize(self.imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
                         if i == 0:
                             tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
                             self.max_id += 1
                         else:
                             tmp_trk.predict(tmp_fr, self.config)
-                            tmp_trk.update(y, template, self.config.hist_thresh, tmp_fr, self.config)
+                            tmp_trk.update(y, template, self.config.hist_thresh, tmp_fr, self.config, is_init=True)
 
                         # Initialization hypothesis restoration (semi online mode only)
                         if self.semi_on and i < self.config.max_hyp_len:
@@ -225,7 +222,6 @@ class track:
                             self.trk_result[fr_num - (self.config.max_hyp_len-i) - 1].append(tmp_state)
 
                     self.trk_state.append(tmp_trk)
-
         else:
             self.hyp_dets.append([])
             self.hyp_valid.append([])
@@ -252,9 +248,6 @@ class track:
 
         # Track interpolation (semi online mode only)
         self.track_interpolation(fr_num)
-
-        # Track visualization
-        # self.track_visualization(bgr_img, fr_num)
 
         # Next frame prediction
         for trk in self.trk_state:
@@ -293,7 +286,7 @@ class track:
                 return []
 
         for next_idx in self.hyp_assoc[_depth][assoc_idx]:
-            if self.hyp_valid[_depth - 1][next_idx] and self.hyp_assoc[_depth - 1][next_idx]:
+            if self.hyp_valid[_depth - 1][next_idx]:
                 _tmp_trk.insert(0, next_idx)
                 if self.recursive_find(_depth - 1, next_idx, _tmp_trk):
                     return _tmp_trk
@@ -350,19 +343,3 @@ class track:
                     tmp_save.append(tmp_state)
 
         self.trk_result.append(tmp_save)
-
-    def track_visualization(self, bgr_img, fr_num):
-        if len(self.trk_result[-1]) > 0:
-            for trk in self.trk_result[-1]:
-                cv2.putText(bgr_img, str(trk[0]), (int(trk[1]), int(trk[2])), cv2.FONT_HERSHEY_COMPLEX, 2,
-                            trk[5], 2)
-                cv2.rectangle(bgr_img, (int(trk[1]), int(trk[2])), (int(trk[1] + trk[3]), int(trk[2] + trk[4])),
-                              trk[5], 3)
-        if self.visualization:
-            cv2.imshow('{}'.format(fr_num), bgr_img)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-        else:
-            cv2.imwrite(os.path.join('results', self.seq_name, '{}.png'.format(fr_num)), bgr_img)
-
-        return bgr_img

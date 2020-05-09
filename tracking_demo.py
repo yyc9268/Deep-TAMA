@@ -5,13 +5,25 @@ from tracking.config import config
 from tracking.main_tracker import track
 import cv2
 import math
+import numpy as np
 
 
 seqlist_path = "sequence_groups"
 
+# Manually set the FPS to simulate real-time tracking
+set_fps = False
+new_fps = 10
+
+# Set the semi-online mode True for better tracking performance
+# 1. Initialization hypotesis restoration
+# 2. Track interpolation
+# Note : Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
+semi_on = True
+fr_delay = 10
+
 
 def track_write_result(trk_cls, _seq_name, _fr_list):
-    with open(os.path.join('results', _seq_name, 'results.txt'), 'w') as file:
+    with open(os.path.join('results', '{}.txt'.format(_seq_name)), 'w') as file:
         for fr, trk_in_fr in enumerate(trk_cls.trk_result):
             for trk in trk_in_fr:
                 tmp_write = "{}, {}, {}, {}, {}, {}, {}, {}, {}, {}\n".format(_fr_list[fr], trk[0], trk[1], trk[2],
@@ -41,19 +53,9 @@ def track_write_image(trk_cls, _seq_name, _data, _fr_list, trj_len=1):
 
 
 if __name__=="__main__":
-    # Manually set the FPS to simulate real-time tracking
-    set_fps = False
-    new_fps = 5
-
-    # Set the semi-online mode True for better tracking performance
-    # 1. Initialization hypotesis restoration
-    # 2. Track interpolation
-    # Note : Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
-    semi_on = True
-    fr_delay = 10
 
     # Set the name of sequences for tracking
-    seqlist_name = "seq_list1.txt"
+    seqlist_name = "seq_list4.txt"
     seq_file_path = os.path.join(seqlist_path, seqlist_name)
     lines = [line.rstrip('\n').split(' ') for line in open(seq_file_path) if len(line) > 1]
     seq_names = []
@@ -90,6 +92,12 @@ if __name__=="__main__":
 
         _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
 
+        # Fake inference to prevent a slow initial inference
+        fake_input1 = np.ones((100, 128, 64, 6))
+        fake_input2 = np.ones((100, 15, 153))
+        feature_batch = _track.NN.get_feature(fake_input1)
+        likelihoods = _track.NN.get_likelihood(fake_input2)
+
         print("{}".format(seq_name))
         print("frame interval : {}, fps : {}".format(fr_intv, seq_info[2]))
         print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(_config.assoc_iou_thresh, _config.assoc_shp_thresh,
@@ -101,21 +109,34 @@ if __name__=="__main__":
         # if set_fps == False : cur_fr == actual_fr
         fr_list = []
         cur_fr = 0
-        st_time = time.time()
+        max_time = 0
+        max_fr = -1
+        cur_time = 0
+
         for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
                 continue
             else:
                 cur_fr += 1
             fr_list.append(actual_fr)
+
             bgr_img, dets = data.get_frame_info(seq_name=seq_name, frame_num=actual_fr)
-            _track.track(bgr_img, dets, cur_fr, fr_list)
+
+            tmp_st_time = time.time()
+            _track.track(bgr_img, dets, cur_fr)
+            tmp_time = time.time() - tmp_st_time
+            cur_time += tmp_time
+
+            if tmp_time > max_time and tmp_time < 1.0:
+                max_time = tmp_time
+                max_fr = cur_fr
 
         tot_fr += cur_fr
-        cur_time = time.time()-st_time
         tot_time += cur_time
+        print('Max processing time : {} Sec/Frame at {}-fr'.format(max_time, max_fr))
         print('Average processing time : {} Sec/Frame'.format(cur_time/cur_fr))
         track_write_result(_track, seq_name, fr_list)
-        #track_write_image(_track, seq_name, data, fr_list, trj_len=100)
+        track_write_image(_track, seq_name, data, fr_list, trj_len=100)
 
+    print('Total processing time : {} Sec'.format(tot_time))
     print('Total average processing time : {} Sec/Frame'.format(tot_time / tot_fr))

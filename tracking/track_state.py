@@ -59,7 +59,7 @@ class trackState:
 
         return self.X, self.P
 
-    def update(self, y, app, conf, fr, param):
+    def update(self, y, app, conf, fr, param, is_init=False):
         Y = np.array([[y[0]], [y[1]]])
         IM = self.H @ self.X
         IS = self.R + self.H @ self.P @ self.H.T
@@ -70,7 +70,7 @@ class trackState:
 
         # Historical Appearance Management
         # Addition rule
-        if self.recent_conf > param.hist_thresh:
+        if self.recent_conf > param.hist_thresh or is_init:
             self.add_recent_to_hist(param, fr)
 
         # Deletion rule

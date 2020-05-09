@@ -1,0 +1,7 @@
+GIST-ParkingLot1 0
+GIST-ParkingLot2 0
+GIST-DownHill1 0
+GIST-DownHill2 0
+GIST-StudentUnion1 0
+GIST-StudentUnion2 0
+GIST-Road 0
