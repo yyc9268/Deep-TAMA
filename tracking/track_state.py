@@ -71,7 +71,7 @@ class trackState:
         # Historical Appearance Management
         # Addition rule
         if self.recent_conf > param.hist_thresh or is_init:
-            self.add_recent_to_hist(param, fr)
+            self.add_recent_to_hist(param, is_init)
 
         # Deletion rule
         if len(self.historical_app) > param.max_hist_len:
@@ -90,8 +90,8 @@ class trackState:
         self.historical_frs.pop(0)
         self.historical_shps.pop(0)
 
-    def add_recent_to_hist(self, param, fr):
-        if (fr - self.recent_fr) >= param.min_hist_intv:
+    def add_recent_to_hist(self, param, is_init):
+        if len(self.historical_app) == 0 or is_init or (self.recent_fr - self.historical_frs[-1]) >= param.min_hist_intv:
             self.historical_app.append(self.recent_app)
             self.historical_conf.append(self.recent_conf)
             self.historical_frs.append(self.recent_fr)

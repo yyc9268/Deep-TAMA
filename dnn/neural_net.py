@@ -27,7 +27,7 @@ class neuralNet:
         self.lstm_input = Input(shape=(self.max_trk_len, self.matching_feature_sz+3))
 
         if is_test:
-            self.DeepTAMA = load_model(self._save_dir + '/DeepTAMA-model-{}.h5'.format(620))
+            self.DeepTAMA = load_model(self._save_dir + '/DeepTAMA-model-{}.h5'.format(600))
             self.JINet = load_model(self._save_dir + '/JINet-model-{}.h5'.format(1000))
             self.featureExtractor = Model(inputs=self.JINet.inputs, outputs=self.JINet.get_layer('matching_feature').output)
         else:

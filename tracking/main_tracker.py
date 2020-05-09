@@ -44,6 +44,19 @@ class track:
 
         # Track-detection association
         prev_trk = deepcopy(self.trk_state)
+        """
+        print('FR : ', fr_num)
+        for trk in prev_trk:
+            print('Track ID : ', trk.track_id)
+            cat_img = np.zeros((128, 0, 3))
+            for hist_img in trk.historical_app:
+                cat_img = np.concatenate((cat_img, hist_img), 1)
+
+            cat_img = np.concatenate((cat_img, trk.recent_app), 1)
+            cv2.imshow('img', cat_img / 255)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        """
 
         if len(prev_trk) > 0 and len(dets) > 0:
 
@@ -134,9 +147,12 @@ class track:
             # Track update
             assoc_det_ind = []
             for trk_ind, det_ind in zip(col_ind, row_ind):
+                #print('({}, {})'.format(trk_ind, det_ind))
                 if sim_mat[det_ind, trk_ind] > self.config.assoc_thresh:
                     y = dets[det_ind]
                     template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]: y[0] + y[2]], (64, 128))
+                    # cv2.imshow('img', np.concatenate((template, self.trk_state[trk_ind].recent_app), 1))
+                    # cv2.waitKey(0)
                     self.trk_state[trk_ind].update(dets[det_ind], template, sim_mat[det_ind, trk_ind], fr_num, self.config)
                     assoc_det_ind.append(det_ind)
 
@@ -160,6 +176,7 @@ class track:
                 for det_ind, det in enumerate(dets):
                     is_assoc = False
                     tmp_assoc = []
+
                     for hyp_ind, hyp in enumerate(prev_hyp):
                         # Strict initialization
                         if iou(det, hyp) > self.config.assoc_iou_thresh:
@@ -205,9 +222,12 @@ class track:
             # Recursively update trk
             if len(to_tracks) > 0:
                 for to_track in to_tracks:
+                    concat_img = np.zeros((128, 0, 3), dtype=float)
+
                     for i, y in enumerate(to_track):
                         tmp_fr = fr_num - self.config.max_hyp_len + i
                         template = cv2.resize(self.imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
+                        concat_img = np.concatenate((concat_img, template), 1)
                         if i == 0:
                             tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
                             self.max_id += 1
