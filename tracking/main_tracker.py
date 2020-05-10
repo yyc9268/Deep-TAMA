@@ -44,26 +44,13 @@ class track:
 
         # Track-detection association
         prev_trk = deepcopy(self.trk_state)
-        """
-        print('FR : ', fr_num)
-        for trk in prev_trk:
-            print('Track ID : ', trk.track_id)
-            cat_img = np.zeros((128, 0, 3))
-            for hist_img in trk.historical_app:
-                cat_img = np.concatenate((cat_img, hist_img), 1)
-
-            cat_img = np.concatenate((cat_img, trk.recent_app), 1)
-            cv2.imshow('img', cat_img / 255)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-        """
 
         if len(prev_trk) > 0 and len(dets) > 0:
 
             # Get detection templates
             det_templates = np.zeros((dets.shape[0], 128, 64, 3))
             for idx, det in enumerate(dets):
-                cropped = bgr_img[det[1]:det[1] + det[3], det[0]:det[0] + det[2]]
+                cropped = bgr_img[det[1] - det[3]//2:det[1] + det[3]//2, det[0]-det[2]//2:det[0] + det[2]//2]
                 det_templates[idx, :, :, :] = cv2.resize(cropped, (64, 128))
 
             # Construct a similarity matrix
@@ -75,6 +62,7 @@ class track:
                 for j, trk in enumerate(prev_trk):
                     mot_sim = trk.mahalanobis_distance(det, fr_num)
                     gating_mat[i, j] = mot_sim * prev_trk[j].get_shp_similarity(dets[i][2:4], fr_num)
+                    #gating_mat[i, j] = mot_sim
                     sim_mat[i, j] = mot_sim
 
             # Appearance similarity calculation
@@ -121,14 +109,14 @@ class track:
                 # Create LSTM input batch
                 valid_matching_templates = [i for i in num_matching_templates if i > 0]
 
-                input_batch = np.zeros((sum(num_matching_templates), self.config.max_hist_len+1, 150+3))
+                input_batch = np.zeros((sum(num_matching_templates), self.config.lstm_len, 150+3))
                 cur_idx = 0
 
                 for idx, tmp_num in enumerate(valid_matching_templates):
                     if tmp_num > 0:
                         tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
-                        input_batch[idx, self.config.max_hist_len+1 - tmp_num:, :-3] = tmp_features
-                        input_batch[idx, self.config.max_hist_len+1 - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
+                        input_batch[idx, self.config.lstm_len - tmp_num:, :-3] = tmp_features
+                        input_batch[idx, self.config.lstm_len - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
                         cur_idx += tmp_num
 
                 # Final appearance likelihood from Deep-TAMA
@@ -150,7 +138,7 @@ class track:
                 #print('({}, {})'.format(trk_ind, det_ind))
                 if sim_mat[det_ind, trk_ind] > self.config.assoc_thresh:
                     y = dets[det_ind]
-                    template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]: y[0] + y[2]], (64, 128))
+                    template = cv2.resize(bgr_img[y[1]-y[3]//2:y[1] + y[3]//2, y[0]-y[2]//2: y[0] + y[2]//2], (64, 128))
                     # cv2.imshow('img', np.concatenate((template, self.trk_state[trk_ind].recent_app), 1))
                     # cv2.waitKey(0)
                     self.trk_state[trk_ind].update(dets[det_ind], template, sim_mat[det_ind, trk_ind], fr_num, self.config)
@@ -172,17 +160,27 @@ class track:
             tmp_hyp_dets = []
             tmp_hyp_valid = []
             tmp_hyp_assoc = []
+
             if len(dets) > 0 and len(prev_hyp) > 0:
                 for det_ind, det in enumerate(dets):
                     is_assoc = False
                     tmp_assoc = []
+                    tmp_conf = []
 
+                    # Hierarchical initialization
                     for hyp_ind, hyp in enumerate(prev_hyp):
                         # Strict initialization
-                        if iou(det, hyp) > self.config.assoc_iou_thresh:
+                        tmp_det = deepcopy(det)
+                        tmp_det[0] -= tmp_det[1]//2
+                        tmp_det[2] -= tmp_det[3]//2
+                        iou_score = iou(tmp_det, hyp)
+                        if iou_score > self.config.assoc_iou_thresh:
                             is_assoc = True
                             tmp_assoc.append(hyp_ind)
+                            tmp_conf.append(iou_score)
                     if is_assoc:
+                        tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a:a[0], reverse=True)]
+                        tmp_assoc = [tmp_assoc[0]]
                         dets_unassoc[det_ind] = False
                         tmp_hyp_dets.append(det)
                         tmp_hyp_valid.append(True)
@@ -194,12 +192,14 @@ class track:
                             if pos_dist < det[3]*self.config.assoc_dist_thresh and shp_dist > self.config.assoc_shp_thresh:
                                 is_assoc = True
                                 tmp_assoc.append(hyp_ind)
+                                tmp_conf.append((-pos_dist) + shp_dist)
                         if is_assoc:
+                            tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a:a[0], reverse=True)]
+                            tmp_assoc = [tmp_assoc[0]]
                             dets_unassoc[det_ind] = False
                             tmp_hyp_dets.append(det)
                             tmp_hyp_valid.append(True)
                             tmp_hyp_assoc.append(tmp_assoc)
-
             self.hyp_dets.append(tmp_hyp_dets)
             self.hyp_valid.append(tmp_hyp_valid)
             self.hyp_assoc.append(tmp_hyp_assoc)
@@ -226,7 +226,7 @@ class track:
 
                     for i, y in enumerate(to_track):
                         tmp_fr = fr_num - self.config.max_hyp_len + i
-                        template = cv2.resize(self.imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
+                        template = cv2.resize(self.imgs[i][y[1] - y[3]//2:y[1] + y[3]//2, y[0] - y[2]//2:y[0] + y[2]//2], (64, 128))
                         concat_img = np.concatenate((concat_img, template), 1)
                         if i == 0:
                             tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
@@ -237,7 +237,9 @@ class track:
 
                         # Initialization hypothesis restoration (semi online mode only)
                         if self.semi_on and i < self.config.max_hyp_len:
-                            tmp_state = [tmp_trk.track_id, tmp_trk.X[0][0], tmp_trk.X[2][0], tmp_trk.recent_shp[0],
+                            tmp_pos = self.center_to_lt(tmp_trk.X[0][0], tmp_trk.X[2][0], tmp_trk.recent_shp[0],
+                                         tmp_trk.recent_shp[1])
+                            tmp_state = [tmp_trk.track_id, tmp_pos[0], tmp_pos[1], tmp_trk.recent_shp[0],
                                          tmp_trk.recent_shp[1], tmp_trk.color]
                             self.trk_result[fr_num - (self.config.max_hyp_len-i) - 1].append(tmp_state)
 
@@ -292,7 +294,12 @@ class track:
             dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
             keep = nms(dets, self.config.nms_iou_thresh)
             dets = dets[keep]
-            dets = dets[dets[:, 5] > self.config.det_thresh].astype(int)
+            dets = dets[dets[:, 5] > self.config.det_thresh].astype(float)
+
+            # LT to Center
+            dets[:, 0] += dets[:, 2]/2
+            dets[:, 1] += dets[:, 3]/2
+            dets = dets.astype(int)
         else:
             dets = []
 
@@ -353,13 +360,17 @@ class track:
                 for i in range(1, found_i):
                     self.trk_result[-1-i].append(intp_trk[-i])
 
+    def center_to_lt(self, cx, cy, w, h):
+        return [cx - w//2, cy - h//2]
+
     def track_save(self, fr_num):
         tmp_save = []
         valid_miss_num = 1
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
                 if trk.recent_fr > fr_num - valid_miss_num:
-                    tmp_state = [trk.track_id, trk.X[0][0], trk.X[2][0], trk.get_shp(fr_num)[0], trk.get_shp(fr_num)[1], trk.color]
+                    tmp_pos = self.center_to_lt(trk.X[0][0], trk.X[2][0], trk.get_shp(fr_num)[0], trk.get_shp(fr_num)[1])
+                    tmp_state = [trk.track_id, tmp_pos[0], tmp_pos[1], trk.get_shp(fr_num)[0], trk.get_shp(fr_num)[1], trk.color]
                     tmp_save.append(tmp_state)
 
         self.trk_result.append(tmp_save)

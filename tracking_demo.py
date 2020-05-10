@@ -11,8 +11,8 @@ import numpy as np
 seqlist_path = "sequence_groups"
 
 # Manually set the FPS to simulate real-time tracking
-set_fps = False
-new_fps = 10
+set_fps = True
+new_fps = 5
 
 # Set the semi-online mode True for better tracking performance
 # 1. Initialization hypotesis restoration
@@ -55,7 +55,7 @@ def track_write_image(trk_cls, _seq_name, _data, _fr_list, trj_len=1):
 if __name__=="__main__":
 
     # Set the name of sequences for tracking
-    seqlist_name = "seq_list4.txt"
+    seqlist_name = "seq_list3.txt"
     seq_file_path = os.path.join(seqlist_path, seqlist_name)
     lines = [line.rstrip('\n').split(' ') for line in open(seq_file_path) if len(line) > 1]
     seq_names = []
@@ -94,7 +94,7 @@ if __name__=="__main__":
 
         # Fake inference to prevent a slow initial inference
         fake_input1 = np.ones((100, 128, 64, 6))
-        fake_input2 = np.ones((100, 15, 153))
+        fake_input2 = np.ones((100, _config.lstm_len, 153))
         feature_batch = _track.NN.get_feature(fake_input1)
         likelihoods = _track.NN.get_likelihood(fake_input2)
 
@@ -109,10 +109,8 @@ if __name__=="__main__":
         # if set_fps == False : cur_fr == actual_fr
         fr_list = []
         cur_fr = 0
-        max_time = 0
-        max_fr = -1
         cur_time = 0
-
+        # seq_info[-1] = 100
         for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
                 continue
@@ -127,16 +125,11 @@ if __name__=="__main__":
             tmp_time = time.time() - tmp_st_time
             cur_time += tmp_time
 
-            if tmp_time > max_time and tmp_time < 1.0:
-                max_time = tmp_time
-                max_fr = cur_fr
-
         tot_fr += cur_fr
         tot_time += cur_time
-        print('Max processing time : {} Sec/Frame at {}-fr'.format(max_time, max_fr))
         print('Average processing time : {} Sec/Frame'.format(cur_time/cur_fr))
         track_write_result(_track, seq_name, fr_list)
-        track_write_image(_track, seq_name, data, fr_list, trj_len=100)
+        track_write_image(_track, seq_name, data, fr_list, trj_len=seq_info[2]*20)
 
     print('Total processing time : {} Sec'.format(tot_time))
     print('Total average processing time : {} Sec/Frame'.format(tot_time / tot_fr))

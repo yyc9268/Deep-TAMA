@@ -8,7 +8,7 @@ def main():
     #del NN
 
     # Train LSTM using pre-trained JI-Net
-    NN = neuralNet(train_mode='LSTM')
+    NN = neuralNet(train_mode='LSTM', max_trk_len=6)
     NN.train_lstm()
     del NN
 

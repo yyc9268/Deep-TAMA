@@ -27,7 +27,7 @@ class neuralNet:
         self.lstm_input = Input(shape=(self.max_trk_len, self.matching_feature_sz+3))
 
         if is_test:
-            self.DeepTAMA = load_model(self._save_dir + '/DeepTAMA-model-{}.h5'.format(600))
+            self.DeepTAMA = load_model(self._save_dir + '/DeepTAMA-model-{}.h5'.format(1000))
             self.JINet = load_model(self._save_dir + '/JINet-model-{}.h5'.format(1000))
             self.featureExtractor = Model(inputs=self.JINet.inputs, outputs=self.JINet.get_layer('matching_feature').output)
         else:
@@ -115,7 +115,7 @@ class neuralNet:
         dataCls = dl.data()
 
         val_img_batch, val_shp_batch, val_label_batch, val_trk_len = dataCls.get_deeptama_batch(self.max_trk_len, 1024, 'validation')
-
+        print(val_img_batch.shape)
         # Create validation batch
         val_input_batch, val_idx = self.create_lstm_input(val_img_batch, val_shp_batch, val_trk_len)
 

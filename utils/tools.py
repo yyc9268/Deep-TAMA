@@ -39,10 +39,10 @@ def iou(bb1, bb2):
 
 
 def separate_measure(bb1, bb2):
-    cpos1 = [bb1[0]+bb1[2]/2, bb1[1]+bb1[3]/2]
-    cpos2 = [bb2[0]+bb2[2]/2, bb2[1]+bb2[3]/2]
+    # cpos1 = [bb1[0]+bb1[2]/2, bb1[1]+bb1[3]/2]
+    # cpos2 = [bb2[0]+bb2[2]/2, bb2[1]+bb2[3]/2]
 
-    pos_dist = math.sqrt((cpos1[0]-cpos2[0])**2 + (cpos1[1]-cpos2[1])**2)
+    pos_dist = math.sqrt((bb1[0]-bb2[0])**2 + (bb1[1]-bb2[1])**2)
     shp_dist = min(bb1[3]/bb2[3], bb2[3]/bb1[3])
 
     return pos_dist, shp_dist

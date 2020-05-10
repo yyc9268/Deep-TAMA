@@ -74,7 +74,7 @@ class trackState:
             self.add_recent_to_hist(param, is_init)
 
         # Deletion rule
-        if len(self.historical_app) > param.max_hist_len:
+        if len(self.historical_app) >= param.max_hist_len:
             self.pop_first_hist_element()
 
         self.recent_app = app
@@ -109,9 +109,9 @@ class trackState:
             pred_shp = self.recent_shp
         else:
             intp_fr = fr - self.recent_fr
-            pred_shp = (lambda a, b, fr_diff: [a[0] + intp_fr*(a[0]-b[0])/fr_diff, a[1] + intp_fr*(a[1]-b[1])/fr_diff])\
+            tmp_pred_shp = (lambda a, b, fr_diff: [a[0] + intp_fr*(a[0]-b[0])/fr_diff, a[1] + intp_fr*(a[1]-b[1])/fr_diff])\
                 (self.recent_shp, self.historical_shps[-1], self.recent_fr - self.historical_frs[-1])
-
+            pred_shp = (self.recent_shp + tmp_pred_shp)/2
         return pred_shp
 
     def get_shp_similarity(self, y, fr):
@@ -121,8 +121,8 @@ class trackState:
         return shp_sim
 
     def mahalanobis_distance(self, y, fr):
-        X = self.get_center(fr)
-        X = np.array(X)
-        Y = np.array([[y[0]+y[2]/2, y[1]+y[3]/2]])
+        # X = self.get_center(fr)
+        X = np.array([[self.X[0][0], self.X[2][0]]])
+        Y = np.array([[y[0], y[1]]])
         d_squared = np.exp(-0.5 * (X-Y) @ np.linalg.inv(self.pos_var) @ (X-Y).T)
         return d_squared[0][0]
