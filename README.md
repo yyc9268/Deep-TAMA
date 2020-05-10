@@ -100,5 +100,5 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
 >> - The code produces tracking results in both txt and image format.
 
 ## Pre-trained models
-    JI-Net : https://drive.google.com/open?id=1Xz1zEjshvPIZqi0K7WOrZOVQZ8lbQvuf
+    JI-Net : https://drive.google.com/open?id=1H_pcOb0HC7XAw6Xc3QLtx66a4QF1ByOn
     LSTM : https://drive.google.com/open?id=1lETIh-5seYzdXEpy4WZj8Z9JPx4Fvuc3
