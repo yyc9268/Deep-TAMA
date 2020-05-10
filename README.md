@@ -5,13 +5,6 @@
   <img src="/images/Stadtmitte_results.gif" height="300">
 </p>
 
-## Important !!!
-
-Though the tracking is available in current version, there still remain minor errors.
-
-We are struggling to debug and arrange the code.
-
-
 ## Reference
 
 ```
