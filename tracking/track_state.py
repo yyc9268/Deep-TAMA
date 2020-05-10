@@ -8,7 +8,8 @@ class trackState:
     """
     def __init__(self, init_y, init_app, init_fr, track_id, param):
         # init_y : [x, y, w, h, conf, fr]
-        self.X = np.array([[init_y[0]],  [0], [init_y[1]], [0]])
+        # LT to center
+        self.X = np.array([[init_y[0]+init_y[2]/2],  [0], [init_y[1]+init_y[3]/2], [0]])
 
         # state transition matrix
         self.Ts = 1
@@ -60,7 +61,8 @@ class trackState:
         return self.X, self.P
 
     def update(self, y, app, conf, fr, param, is_init=False):
-        Y = np.array([[y[0]], [y[1]]])
+        # LT to center
+        Y = np.array([[y[0]+y[2]/2], [y[1]+y[3]/2]])
         IM = self.H @ self.X
         IS = self.R + self.H @ self.P @ self.H.T
         K = (self.P @ self.H.T)@np.linalg.inv(IS)
@@ -97,11 +99,17 @@ class trackState:
             self.historical_frs.append(self.recent_fr)
             self.historical_shps.append(self.recent_shp)
 
-    def get_center(self, fr):
+    def bbox_info(self, fr):
         shp = self.get_shp(fr)
-        center_pos = [self.X[0][0]+shp[0]/2, self.X[2][0]+shp[1]/2]
+        bbox_info = [self.X[0][0]-shp[0]/2, self.X[2][0]-shp[1]/2, shp[0], shp[1]]
 
-        return center_pos
+        return bbox_info
+
+    def save_info(self, fr):
+        bbox = self.bbox_info(fr)
+        save_state = [self.track_id, *bbox, self.color]
+
+        return save_state
 
     def get_shp(self, fr):
         # Get predicted shape
@@ -112,6 +120,7 @@ class trackState:
             tmp_pred_shp = (lambda a, b, fr_diff: [a[0] + intp_fr*(a[0]-b[0])/fr_diff, a[1] + intp_fr*(a[1]-b[1])/fr_diff])\
                 (self.recent_shp, self.historical_shps[-1], self.recent_fr - self.historical_frs[-1])
             pred_shp = (self.recent_shp + tmp_pred_shp)/2
+
         return pred_shp
 
     def get_shp_similarity(self, y, fr):
@@ -120,9 +129,8 @@ class trackState:
 
         return shp_sim
 
-    def mahalanobis_distance(self, y, fr):
-        # X = self.get_center(fr)
+    def mahalanobis_distance(self, y):
         X = np.array([[self.X[0][0], self.X[2][0]]])
-        Y = np.array([[y[0], y[1]]])
+        Y = np.array([[y[0]+y[2]/2, y[1]+y[3]/2]])
         d_squared = np.exp(-0.5 * (X-Y) @ np.linalg.inv(self.pos_var) @ (X-Y).T)
         return d_squared[0][0]

@@ -7,12 +7,12 @@ import numpy as np
 Collection of tools handling bounding-boxes
 """
 
+
 def nms(orig_dets, iou_thresh):
     """
     :param dets: [[x, y, w, h], ..., [x, y, w, h]]
     :return: keeping det indices
     """
-
     dets = copy.deepcopy(orig_dets)
     dets = dets[dets[:,5].argsort()[::-1]]
     keep = [True]*len(dets)
@@ -21,6 +21,7 @@ def nms(orig_dets, iou_thresh):
             if iou(dets[i], dets[j]) > iou_thresh:
                 keep[j] = False
     return keep
+
 
 def iou(bb1, bb2):
     x1 = max(bb1[0], bb2[0])

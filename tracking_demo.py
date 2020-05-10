@@ -10,17 +10,6 @@ import numpy as np
 
 seqlist_path = "sequence_groups"
 
-# Manually set the FPS to simulate real-time tracking
-set_fps = True
-new_fps = 5
-
-# Set the semi-online mode True for better tracking performance
-# 1. Initialization hypotesis restoration
-# 2. Track interpolation
-# Note : Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
-semi_on = True
-fr_delay = 10
-
 
 def track_write_result(trk_cls, _seq_name, _fr_list):
     with open(os.path.join('results', '{}.txt'.format(_seq_name)), 'w') as file:
@@ -54,8 +43,19 @@ def track_write_image(trk_cls, _seq_name, _data, _fr_list, trj_len=1):
 
 if __name__=="__main__":
 
+    # Manually set the FPS to simulate real-time tracking
+    set_fps = False
+    new_fps = 5
+
+    # Set the semi-online mode True for better tracking performance
+    # 1. Initialization hypotesis restoration
+    # 2. Track interpolation
+    # Note : Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
+    semi_on = True
+    fr_delay = 10
+
     # Set the name of sequences for tracking
-    seqlist_name = "seq_list3.txt"
+    seqlist_name = "seq_list1.txt"
     seq_file_path = os.path.join(seqlist_path, seqlist_name)
     lines = [line.rstrip('\n').split(' ') for line in open(seq_file_path) if len(line) > 1]
     seq_names = []
@@ -110,7 +110,7 @@ if __name__=="__main__":
         fr_list = []
         cur_fr = 0
         cur_time = 0
-        # seq_info[-1] = 100
+        #seq_info[-1] = 100
         for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
                 continue
