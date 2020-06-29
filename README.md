@@ -102,6 +102,6 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
 - Locate the downloaded models in 'model' directory
 - Download links
 
-    JI-Net : https://drive.google.com/open?id=1H_pcOb0HC7XAw6Xc3QLtx66a4QF1ByOn
+    JI-Net : https://drive.google.com/file/d/1Xz1zEjshvPIZqi0K7WOrZOVQZ8lbQvuf/view?usp=sharing
     
-    LSTM : https://drive.google.com/open?id=1lETIh-5seYzdXEpy4WZj8Z9JPx4Fvuc3
+    LSTM : https://drive.google.com/file/d/1H_pcOb0HC7XAw6Xc3QLtx66a4QF1ByOn/view?usp=sharing
