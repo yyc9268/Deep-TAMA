@@ -62,35 +62,35 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
 1. Download the pre-trained models and locate in in model directory.
 
 2. Set the public variable in 'seq_path' in data_loader.py to your own dataset path.
->> - dataset should be 'MOT/{sequence_folder-1, ..., sequence_folder-N}'.
->> - each sequence_folder should follow the MOTChallenge style (e.g., 'sequence_folder-1/{det, gt, img1}').
->> - The simplest way is just copy and paste all MOTChallenge datasets (2DMOT2015, MOT16, MOT16, MOT20, etc) in 'MOT' folder.
->> - The compatible datasets are available on [MOTChallenge](https://motchallenge.net/).
+    * dataset should be 'MOT/{sequence_folder-1, ..., sequence_folder-N}'.
+    * each sequence_folder should follow the MOTChallenge style (e.g., 'sequence_folder-1/{det, gt, img1}').
+    * The simplest way is just copy and paste all MOTChallenge datasets (2DMOT2015, MOT16, MOT16, MOT20, etc) in 'MOT' folder.
+    * The compatible datasets are available on [MOTChallenge](https://motchallenge.net/).
 
 3. Set the variable 'seqlist_name' in 'tracking_demo.py' to the proper name.
->> - We have already set some sequence groups to test the tracker.
->> - Add your own tracking sequence group in 'sequence_groups'.
+    * We have already set some sequence groups to test the tracker.
+    * Add your own tracking sequence group in 'sequence_groups'.
 
 4. Perform tracking using 'tracking_demo.py'.
->> - tracking thresholds can be controlled by modifying 'config.py'.
->> - There exist two mode on-off variables in 'tracking_demo.py'.
->> - 'set_fps' can lower the FPS of the video which is for test on real-time application.
->> - 'semi_on' can increase the tracking performance though suffering a few frames delay.
+    * tracking thresholds can be controlled by modifying 'config.py'.
+    * There exist two mode on-off variables in 'tracking_demo.py'.
+    * 'set_fps' can manipulate the FPS of the video which is for test on real-time application.
+    * 'semi_on' improves the tracking performance as a trade-off of a delay of a few frames.
 
 ## Training settings
 1. Set the data as same as Tracking settings above.
 
 2. Modify the 'sequence_groups/trainval_group.json' to your own dataset
->> - Note that training and validation dataset should contain 'gt' folder.
+    * Note that training and validation dataset should contain 'gt' folder.
 
 3. Perform training using 'training_demo.py'.
->> - JI-Net training should be performed first.
->> - Using pre-trained JI-Net model, LSTM can be trained.
+    * JI-Net training should be performed first.
+    * Using pre-trained JI-Net model, LSTM can be trained.
 
 ## Evaluation
-- The evaluation tool should be manually set by the users.
->> - We recommend to use the [Matlab](https://bitbucket.org/amilan/motchallenge-devkit/src/default/) or [Python](https://github.com/cheind/py-motmetrics) evaluation tools.
->> - The code produces tracking results in both txt and image format.
+* The evaluation tool should be manually set by the users.
+    * We recommend to use the [Matlab](https://bitbucket.org/amilan/motchallenge-devkit/src/default/) or [Python](https://github.com/cheind/py-motmetrics) evaluation tools.
+    * The code produces tracking results in both txt and image format.
 
 ## Pre-trained models
 
@@ -98,9 +98,9 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
   <img src="/images/lstm.png" height="300"> 
 </p>
 
-- We provide pre-trained models for JI-Net and LSTM
-- Locate the downloaded models in 'model' directory
-- Download links
+* We provide pre-trained models for JI-Net and LSTM
+  * Locate the downloaded models in 'model' directory
+  * Download links
 
     JI-Net : https://drive.google.com/file/d/1Xz1zEjshvPIZqi0K7WOrZOVQZ8lbQvuf/view?usp=sharing
     
