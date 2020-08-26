@@ -1,9 +1,6 @@
 # Deep-TAMA
 
-<p float="left">
-  <img src="/images/PETS_results.gif" height="300"> 
-  <img src="/images/Stadtmitte_results.gif" height="300">
-</p>
+<img src="/images/framework.png" height="300"> 
 
 ## Reference
 
@@ -105,3 +102,10 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
     JI-Net : https://drive.google.com/file/d/1Xz1zEjshvPIZqi0K7WOrZOVQZ8lbQvuf/view?usp=sharing
     
     LSTM : https://drive.google.com/file/d/1H_pcOb0HC7XAw6Xc3QLtx66a4QF1ByOn/view?usp=sharing
+
+## Qualitative results
+
+<p float="left">
+  <img src="/images/PETS_results.gif" height="300"> 
+  <img src="/images/Stadtmitte_results.gif" height="300">
+</p>
