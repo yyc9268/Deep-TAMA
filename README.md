@@ -1,5 +1,7 @@
 # Deep-TAMA
 
+## Notice : Our paper was accepted with minor in Elsevier Information Sciences (IF 5.910)
+
 <img src="/images/framework.png" height="300"> 
 
 ## Reference
