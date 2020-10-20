@@ -14,10 +14,10 @@
   booktitle={IEEE AVSS}
 }
 @inproceedings{ycyoon2019,
-  title={Online Multiple Pedestrian Tracking using Deep Temporal Appearance Matching Association},
+  title={Online Multiple Pedestrians Tracking using Deep Temporal Appearance Matching Association},
   author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
-  year={2019},
-  booktitle={arXiv:1907.00831}
+  year={2020},
+  booktitle={Information Sciences}
 }
 ```
 
