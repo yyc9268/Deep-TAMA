@@ -4,27 +4,6 @@
 
 <img src="/images/framework.png" height="300"> 
 
-## Reference
-
-```
-@inproceedings{ycyoon2018,
-  title={Online Multi-Object Tracking with Historical Appearance Matching and Scene Adaptive Detection Filtering},
-  author={Young-Chul Yoon and Abhijeet Boragule and Young-min Song and Kwangjin Yoon and Moongu Jeon},
-  year={2018},
-  booktitle={IEEE AVSS}
-}
-@inproceedings{ycyoon2020,
-  title={Online Multiple Pedestrians Tracking using Deep Temporal Appearance Matching Association},
-  author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
-  year={2020},
-  booktitle={Information Sciences}
-}
-```
-
-<img src="/images/cvpr_award.jpg" height="400">
-
-This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held in CVPR 2019
-
 ## Enviroment
     OS : Windows10 64bit
     CPU : Intel i5-8500 3.00GHz
@@ -111,3 +90,25 @@ This tracker has been awarded a 3rd Prize on 4th BMTT MOTChallenge Workshop held
   <img src="/images/PETS_results.gif" height="300"> 
   <img src="/images/Stadtmitte_results.gif" height="300">
 </p>
+
+## Reference
+
+```
+@inproceedings{ycyoon2018,
+  title={Online Multi-Object Tracking with Historical Appearance Matching and Scene Adaptive Detection Filtering},
+  author={Young-Chul Yoon and Abhijeet Boragule and Young-min Song and Kwangjin Yoon and Moongu Jeon},
+  year={2018},
+  booktitle={IEEE AVSS}
+}
+@inproceedings{ycyoon2020,
+  title={Online Multiple Pedestrians Tracking using Deep Temporal Appearance Matching Association},
+  author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
+  year={2020},
+  booktitle={Information Sciences}
+}
+```
+
+<img src="/images/cvpr_award.jpg" height="400">
+
+This tracker has been awarded a 3rd Prize on [4th BMTT MOTChallenge Workshop](https://motchallenge.net/results/CVPR_2019_Tracking_Challenge/) held in CVPR 2019
+
