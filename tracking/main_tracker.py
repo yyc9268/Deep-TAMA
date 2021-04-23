@@ -37,6 +37,7 @@ class track:
     def track(self, bgr_img, dets, fr_num):
         # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
         dets = self.det_preprocessing(dets, fr_num)
+        self.trk_result.append([])
 
         if len(self.imgs) > self.config.max_hyp_len:
             self.imgs.pop(0)
@@ -44,10 +45,6 @@ class track:
 
         # Track-detection association
         prev_trk = deepcopy(self.trk_state)
-
-        for trk in self.trk_state:
-            print('id : {}'.format(trk.track_id))
-            print('X : ', trk.X)
 
         if len(prev_trk) > 0 and len(dets) > 0:
             # Get detection templates
@@ -57,27 +54,22 @@ class track:
                 det_templates[idx, :, :, :] = cv2.resize(cropped, (64, 128))
 
             # Construct a similarity matrix
-            gating_mat = np.zeros((len(dets), len(prev_trk)))
             sim_mat = np.zeros((len(dets), len(prev_trk)))
+            num_matching_templates = []
 
             # Motion similarity calculation
             for i, det in enumerate(dets):
                 for j, trk in enumerate(prev_trk):
                     mot_sim = trk.mahalanobis_distance(det)
-                    gating_mat[i, j] = mot_sim * prev_trk[j].get_shp_similarity(dets[i][2:4], fr_num)
-                    sim_mat[i, j] = mot_sim
-                    #print('({},{}) : {}'.format(i, j, gating_mat[i,j]))
-
-            # Appearance similarity calculation
-            # Pre-calculate the Neural-Net input shape to save the time
-            num_matching_templates = []
-            for i in range(gating_mat.shape[0]):
-                for j in range(gating_mat.shape[1]):
-                    if gating_mat[i, j] > self.config.gating_thresh:
+                    mosh_sim = mot_sim * prev_trk[j].get_shp_similarity(dets[i][2:4], fr_num)
+                    if mosh_sim > self.config.gating_thresh:
+                        sim_mat[i,j] = mot_sim
                         num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
                     else:
                         num_matching_templates.append(0)
 
+            # Appearance similarity calculation
+            # Pre-calculate the Neural-Net input shape to save time
             if sum(num_matching_templates) > 0:
                 input_templates = np.zeros((sum(num_matching_templates), 128, 64, 6))
                 input_shps = np.zeros((sum(num_matching_templates), 3))
@@ -85,9 +77,9 @@ class track:
                 # Make input batch
                 cur_idx = 0
                 accum_num = 0
-                for i in range(gating_mat.shape[0]):
-                    for j in range(gating_mat.shape[1]):
-                        if gating_mat[i, j] > self.config.gating_thresh:
+                for i in range(sim_mat.shape[0]):
+                    for j in range(sim_mat.shape[1]):
+                        if sim_mat[i,j] > 0:
                             matching_tmpls = []
                             matching_shps = []
                             anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
@@ -126,9 +118,9 @@ class track:
                 likelihoods = self.NN.get_likelihood(input_batch)
 
                 cur_idx = 0
-                for i in range(gating_mat.shape[0]):
-                    for j in range(gating_mat.shape[1]):
-                        if gating_mat[i, j] > self.config.gating_thresh:
+                for i in range(sim_mat.shape[0]):
+                    for j in range(sim_mat.shape[1]):
+                        if sim_mat[i, j] > 0:
                             sim_mat[i, j] *= likelihoods[cur_idx][0]
                             cur_idx += 1
 
@@ -177,7 +169,6 @@ class track:
                             tmp_assoc.append(hyp_ind)
                             tmp_conf.append(iou_score)
                     if is_assoc:
-                        print('iou associated')
                         tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a:a[0], reverse=True)]
                         dets_unassoc[det_ind] = False
                         tmp_hyp_dets.append(det)
@@ -186,13 +177,12 @@ class track:
                     else:
                         for hyp_ind, hyp in enumerate(prev_hyp):
                             # Weak initialization
-                            pos_dist, shp_dist = separate_measure(det, hyp)
-                            if pos_dist < det[3]*self.config.assoc_dist_thresh and shp_dist > self.config.assoc_shp_thresh:
+                            pos_dist, shp_sim = separate_measure(det, hyp)
+                            if pos_dist < det[3]*self.config.assoc_dist_thresh and shp_sim > self.config.assoc_shp_thresh:
                                 is_assoc = True
                                 tmp_assoc.append(hyp_ind)
-                                tmp_conf.append((-pos_dist) + shp_dist)
+                                tmp_conf.append((-pos_dist) + shp_sim)
                         if is_assoc:
-                            print('dist associated')
                             tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a:a[0], reverse=True)]
                             dets_unassoc[det_ind] = False
                             tmp_hyp_dets.append(det)
@@ -204,18 +194,16 @@ class track:
 
             # Init trk
             to_tracks = []
-            if len(self.hyp_dets) > self.config.max_hyp_len:
+            if len(self.hyp_dets) == self.config.max_hyp_len:
                 for tail_idx, tail_assoc in enumerate(self.hyp_assoc[-1]):
-                    for tail_assoc_idx in tail_assoc:
-                        tmp_trk = [tail_assoc_idx]
-                        out_trk = self.recursive_find(self.config.max_hyp_len-1, tail_assoc_idx, tmp_trk)
-                        if out_trk:
-                            out_trk.append(tail_idx)
-                            tmp_to_track = []
-                            for depth, hyp_idx in enumerate(out_trk):
-                                self.hyp_valid[depth][hyp_idx] = False
-                                tmp_to_track.append(self.hyp_dets[depth][hyp_idx])
-                            to_tracks.append(tmp_to_track)
+                    tmp_trk = [tail_idx]
+                    out_trk = self.recursive_find(self.config.max_hyp_len-1, tail_idx, tmp_trk)
+                    if out_trk:
+                        tmp_to_track = []
+                        for depth, hyp_idx in enumerate(out_trk):
+                            self.hyp_valid[depth][hyp_idx] = False
+                            tmp_to_track.append(self.hyp_dets[depth][hyp_idx])
+                        to_tracks.append(tmp_to_track)
 
             # Recursively update trk
             if len(to_tracks) > 0:
@@ -223,7 +211,7 @@ class track:
                     concat_img = np.zeros((128, 0, 3), dtype=float)
 
                     for i, y in enumerate(to_track):
-                        tmp_fr = fr_num - self.config.max_hyp_len + i
+                        tmp_fr = fr_num - self.config.max_hyp_len + i + 1
                         template = cv2.resize(self.imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
                         concat_img = np.concatenate((concat_img, template), 1)
                         if i == 0:
@@ -236,7 +224,7 @@ class track:
                         # Initialization hypothesis restoration (semi online mode only)
                         if self.semi_on and i < self.config.max_hyp_len:
                             tmp_state = tmp_trk.save_info(tmp_fr)
-                            self.trk_result[fr_num - (self.config.max_hyp_len-i) - 1].append(tmp_state)
+                            self.trk_result[tmp_fr-1].append(tmp_state)
 
                     self.trk_state.append(tmp_trk)
         else:
@@ -264,7 +252,8 @@ class track:
         self.track_save(fr_num)
 
         # Track interpolation (semi online mode only)
-        self.track_interpolation(fr_num)
+        if self.semi_on:
+            self.track_interpolation(fr_num)
 
         # Next frame prediction
         for trk in self.trk_state:
@@ -299,10 +288,7 @@ class track:
 
     def recursive_find(self, _depth, assoc_idx, _tmp_trk):
         if _depth == 0:
-            if self.hyp_valid[_depth][assoc_idx]:
-                return _tmp_trk
-            else:
-                return []
+            return _tmp_trk
 
         for next_idx in self.hyp_assoc[_depth][assoc_idx]:
             if self.hyp_valid[_depth - 1][next_idx]:
@@ -325,7 +311,7 @@ class track:
             found_trk = None
             i = 1
             while not found and i <= self.fr_delay:
-                for refer_trk in self.trk_result[-1-i]:
+                for refer_trk in self.trk_result[-i-1]:
                     if refer_trk[0] == anchor_trk[0]:
                         found = True
                         found_i = i
@@ -361,4 +347,4 @@ class track:
                     tmp_state = trk.save_info(fr_num)
                     tmp_save.append(tmp_state)
 
-        self.trk_result.append(tmp_save)
+        self.trk_result[fr_num-1].extend(tmp_save)
