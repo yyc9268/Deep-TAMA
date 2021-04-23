@@ -6,9 +6,9 @@
 <img src="/images/framework.png" height="300"> 
 
 ## Enviroment
-    OS : Windows10 64bit
+    OS : Windows10 64bit (We have tested that the code works fine on Ubuntu 18.04)
     CPU : Intel i5-8500 3.00GHz
-    GPU : Geforce GTX Titan X
+    GPU : Geforce GTX Titan X (Works on GPU with smaller memory size <= 5GB)
     RAM : 32 GB
 
 ## Requirements
