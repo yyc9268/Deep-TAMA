@@ -1,6 +1,7 @@
 # Deep-TAMA
 
-## Notice : Our paper was accepted in Elsevier Information Sciences (IF 5.910)
+## Notice : Fixed critical bugs related to the tracking performance.
+## Our paper was accepted in Elsevier Information Sciences (IF 5.910)
 
 <img src="/images/framework.png" height="300"> 
 
@@ -12,7 +13,7 @@
 
 ## Requirements
     python 3.6
-    tensorflow-gpu 2.1.0
+    tensorflow-gpu 2.1.0 (Doesn't work with Tensorflow v1)
     numpy 1.17.3
     opencv 3.4.2
     matplotlib 3.1.1
