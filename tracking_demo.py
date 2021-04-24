@@ -111,7 +111,7 @@ if __name__=="__main__":
         fr_list = []
         cur_fr = 0
         cur_time = 0
-        seq_info[-1] = 80
+        # seq_info[-1] = 80
         for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
                 continue
@@ -124,7 +124,6 @@ if __name__=="__main__":
             tmp_st_time = time.time()
             _track.track(bgr_img, dets, cur_fr)
             tmp_time = time.time() - tmp_st_time
-            print(tmp_time)
             cur_time += tmp_time
 
         tot_fr += cur_fr
