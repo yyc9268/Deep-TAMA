@@ -1,11 +1,9 @@
 ## Ignore following dir or files
-
 model/
-
 results/
-
 log/
-
 batch_test_demo.py
-
 create_new_gt_demo.py
+
+__pycache__/
+*.pyc

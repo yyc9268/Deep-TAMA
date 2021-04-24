@@ -52,10 +52,10 @@ if __name__=="__main__":
     # 2. Track interpolation
     # Note : Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
     semi_on = True
-    fr_delay = 10
+    # fr_delay = 30
 
     # Set the name of sequences for tracking
-    seqlist_name = "seq_list1.txt"
+    seqlist_name = "seq_list4.txt"
     seq_file_path = os.path.join(seqlist_path, seqlist_name)
     lines = [line.rstrip('\n').split(' ') for line in open(seq_file_path) if len(line) > 1]
     seq_names = []
@@ -89,6 +89,7 @@ if __name__=="__main__":
         # Get tracking parameters
         _config = config(seq_info[2])
         _config.det_thresh = det_threshes[idx]
+        fr_delay = _config.miss_thresh-1
 
         _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
 
@@ -110,7 +111,7 @@ if __name__=="__main__":
         fr_list = []
         cur_fr = 0
         cur_time = 0
-        #seq_info[-1] = 100
+        seq_info[-1] = 80
         for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
                 continue
@@ -123,6 +124,7 @@ if __name__=="__main__":
             tmp_st_time = time.time()
             _track.track(bgr_img, dets, cur_fr)
             tmp_time = time.time() - tmp_st_time
+            print(tmp_time)
             cur_time += tmp_time
 
         tot_fr += cur_fr
