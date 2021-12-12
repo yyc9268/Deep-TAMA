@@ -4,19 +4,21 @@ import random
 import cv2
 import operator
 import json
-import time
 from utils.tools import normalization, augment_bbox
 
-# Change this path to the users own dataset path
-desktop_path = os.path.expanduser("~\Desktop")
-seq_path = os.path.join(desktop_path, "dataset", 'MOT')
 
-
-class data():
-    def __init__(self, is_test=False, seq_names=[]):
+class Data:
+    def __init__(self, seq_path, is_test=False, seq_names=[]):
+        """
+        Data class initialization
+        :param seq_path: path where dataset is located
+        :param is_test: test mode
+        :param seq_names: sequence names for test mode
+        """
         if is_test:
             assert len(seq_names) > 0, "You should set the seq_lists during test"
         # Read sequence name and info
+        self.seq_path = seq_path
         self.seq_names, self.train_idxs, self.val_idxs = self.read_seq_names(is_test, seq_lists=seq_names)
         self.seq_infos = self.read_seq_info()
 
@@ -33,6 +35,9 @@ class data():
                 id_list = self.create_id_lists(self.seq_lists[i])
                 self.id_lists.append(id_list)
 
+        # Dataset collection
+        self.prev_step = 0
+
     def read_dets(self, seq_list, is_test=False):
         """
         Read ground truth tracking information seq-by-seq.
@@ -43,9 +48,9 @@ class data():
         seq_lists = []
         for seq_name in seq_list:
             if is_test:
-                det_path = os.path.join(seq_path, seq_name, "det", "det.txt")
+                det_path = os.path.join(self.seq_path, seq_name, "det", "det.txt")
             else:
-                det_path = os.path.join(seq_path, seq_name, "gt", "gt.txt")
+                det_path = os.path.join(self.seq_path, seq_name, "gt", "gt.txt")
             lines = [line.rstrip('\n').split(',') for line in open(det_path) if len(line) > 1]
 
             if is_test:
@@ -108,6 +113,12 @@ class data():
         return id_lists
 
     def read_seq_names(self, is_test, seq_lists=[]):
+        """
+        Read sequence names from json file which defines training and validation set
+        :param is_test: test_mode
+        :param seq_lists: given seq_lists is returned for test mode
+        :return: sequence names, training data indexes, validation data indexes
+        """
         seq_names = []
         train_idxs = []
         val_idxs = []
@@ -125,6 +136,10 @@ class data():
         return seq_names, train_idxs, val_idxs
 
     def read_seq_info(self):
+        """
+        Read sequence info
+        :return: [width, height, fps, total_frame_num]
+        """
         seq_infos = []
         for seq_name in self.seq_names:
             # Since MOT17 shares same sequences with MOT16
@@ -175,14 +190,25 @@ class data():
         return template, is_valid
 
     def read_bgr(self, seq_name, frame_num):
-        img_path = os.path.join(seq_path, seq_name, "img1", "{0:06d}.jpg".format(int(frame_num)))
+        img_path = os.path.join(self.seq_path, seq_name, "img1", "{0:06d}.jpg".format(int(frame_num)))
         img = cv2.imread(img_path)
 
         return img
 
+    def print_progress_bar(self, cur_sz, max_sz, step_sz=20):
+        step_intv = max_sz // step_sz
+        if cur_sz // step_intv > self.prev_step:
+            self.prev_step += 1
+            print('({:06d} / {:06d}) ||'.format(cur_sz, max_sz), end='')
+            for _ in range(self.prev_step):
+                print('=', end='')
+            for _ in range(self.prev_step, step_sz):
+                print(' ', end='')
+            print('||')
+
     def create_jinet_batch(self, batch_sz, train_val):
         """
-        Create training batch.
+        Create JI-Net training batch.
         """
 
         collected_num = 0
@@ -200,10 +226,9 @@ class data():
             seq_info = np.array(self.seq_infos)[self.val_idxs]
 
         seq_idxs = [np.where(all_name_set == name)[0][0] for name in name_set]
-
+        self.prev_step = 0
         while collected_num < batch_sz:
-            if collected_num % 100 == 0:
-                print('collected : {}'.format(collected_num))
+            self.print_progress_bar(collected_num, batch_sz, step_sz=20)
 
             name_idx = random.choice(range(len(seq_idxs)))
             seq_name = name_set[name_idx]
@@ -295,10 +320,9 @@ class data():
 
         min_len = 1
         collected_num = 0
-
+        self.prev_step = 0
         while collected_num < batch_sz:
-            if collected_num % 100 == 0:
-                print("collected : {}".format(collected_num))
+            self.print_progress_bar(collected_num, batch_sz, step_sz=20)
 
             # Get an anchor sequence
             name_idx = random.choice(range(len(seq_idxs)))
@@ -314,7 +338,7 @@ class data():
                 anchor_idx = random.choice([i for i in range(0, len(self.id_lists[seq_idx]))])
                 recur_cnt += 1
             if recur_cnt > 5:
-                print('while 1 stuck')
+                # print('[Warning] failed to find positive anchor idx')
                 continue
 
             anchor_id = self.id_lists[seq_idx][anchor_idx][0]
@@ -335,7 +359,7 @@ class data():
                 continue
 
             pos_pool = anchor_dets[st_idx:anchor_det_idx]
-            sampling_num = random.choice([i for i in range(min_len, min(len(pos_pool), max_trk_len))])
+            sampling_num = random.choice([i for i in range(min_len, min(len(pos_pool), max_trk_len)+1)])
             pos_dets = random.sample(pos_pool, sampling_num)
             pos_dets.sort(key=lambda x: x[0])
 
@@ -350,7 +374,7 @@ class data():
                 neg_det = random.sample(anchor_fr_dets, 1)[0]
                 recur_cnt += 1
             if recur_cnt > 5:
-                print('while 2 stuck')
+                # print('[Warning] failed to find negative anchor idx')
                 continue
             neg_det[0] = anchor_det[0]
             neg_det = np.array(neg_det, dtype='float')
@@ -397,7 +421,6 @@ class data():
                 pos_shp = np.array([pos_det[0], *pos_det[3:5]], dtype='float')
 
                 pos_shp_diff = pos_shp - anchor_shp
-
                 pos_shp_diff[0] /= fr_rate
                 pos_shp_diff[1:3] /= anchor_shp[1:3]
                 neg_shp_diff = pos_shp - neg_shp
@@ -433,9 +456,22 @@ class data():
         return img_batch, shp_batch, np.array(label_batch), track_len
 
     def get_deeptama_batch(self, max_trk_length, batch_sz, train_val):
+        """
+        Get input batch for LSTM
+        :param max_trk_length: maximum length of each track sequence
+        :param batch_sz: batch size
+        :param train_val: training or validation mode
+        :return: image batch, shape batch, label batch, track length (list)
+        """
         img_batch, shp_batch, label_batch, track_len = self.create_deeptama_batch(max_trk_length, batch_sz, train_val)
         return img_batch, shp_batch, label_batch, track_len
 
     def get_jinet_batch(self, batch_sz, train_val):
+        """
+        Get JI-Net input batch
+        :param batch_sz: batch size
+        :param train_val: training or validation mode
+        :return: image batch, label batch
+        """
         img_batch, label_batch = self.create_jinet_batch(batch_sz, train_val)
         return img_batch, label_batch

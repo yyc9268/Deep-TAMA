@@ -1,19 +1,25 @@
-# Deep-TAMA
+# Deep-TAMA 2021
 
-## Notice : Fixed critical bugs related to the tracking performance.
-## Our paper was accepted in Elsevier Information Sciences (IF 5.910)
+#### The paper was accepted in Elsevier Information Sciences (IF 6.795)
+- arXiv paper link : [https://arxiv.org/abs/1907.00831](https://arxiv.org/abs/1907.00831)
 
 <img src="/images/framework.png" height="300"> 
 
+#### TO DO
+* ~~Code refactoring (12/12)~~
+* Two initialization methods (MHT, association-based)
+* Tracking evaluation code
+* Demo tracking sequence update
+
 ## Enviroment
-    OS : Windows10 64bit (We have tested that the code works fine on Ubuntu 18.04)
+    OS : Windows10 64bit (Verified to works fine on Ubuntu 18.04)
     CPU : Intel i5-8500 3.00GHz
-    GPU : Geforce GTX Titan X (Works on GPU with smaller memory size <= 5GB)
+    GPU : Geforce GTX Titan X (Works on GPU with smaller memory size >= 5GB)
     RAM : 32 GB
 
 ## Requirements
     python 3.6
-    tensorflow-gpu 2.1.0 (Doesn't work with Tensorflow v1)
+    tensorflow-gpu 2.1.0 (strict!)
     numpy 1.17.3
     opencv 3.4.2
     matplotlib 3.1.1
@@ -40,7 +46,7 @@
 ## Tracking settings
 1. Download the pre-trained models and locate in in model directory.
 
-2. Set the public variable in 'seq_path' in data_loader.py to your own dataset path.
+2. Set the variable 'seq_path' in config.py to your own dataset path.
     * dataset should be 'MOT/{sequence_folder-1, ..., sequence_folder-N}'.
     * each sequence_folder should follow the MOTChallenge style (e.g., 'sequence_folder-1/{det, gt, img1}').
     * The simplest way is just copy and paste all MOTChallenge datasets (2DMOT2015, MOT16, MOT16, MOT20, etc) in 'MOT' folder.
@@ -53,14 +59,14 @@
 4. Perform tracking using 'tracking_demo.py'.
     * tracking thresholds can be controlled by modifying 'config.py'.
     * There exist two mode on-off variables in 'tracking_demo.py'.
-    * 'set_fps' can manipulate the FPS of the video which is for test on real-time application.
-    * 'semi_on' improves the tracking performance as a trade-off of a delay of a few frames.
+        * 'set_fps' : manipulates an FPS and drop frames of videos
+        * 'semi_on' : improves a tracking performance using interpolation and restoration
 
 ## Training settings
-1. Set the data as same as Tracking settings above.
+1. Set the data as same as 'Tracking settings' above.
 
 2. Modify the 'sequence_groups/trainval_group.json' to your own dataset
-    * Note that training and validation dataset should contain 'gt' folder.
+    * Training and validation dataset should contain 'gt' folder.
 
 3. Perform training using 'training_demo.py'.
     * JI-Net training should be performed first.
@@ -72,18 +78,18 @@
     * The code produces tracking results in both txt and image format.
 
 ## Pre-trained models
-
-<p float="left">
-  <img src="/images/lstm.png" height="300"> 
-</p>
+* LSTM validation loss and accuracy
+    <p float="left">
+      <img src="/images/lstm.png" height="250"> 
+    </p>
 
 * We provide pre-trained models for JI-Net and LSTM
   * Locate the downloaded models in 'model' directory
   * Download links
 
-    JI-Net : https://drive.google.com/file/d/1Xz1zEjshvPIZqi0K7WOrZOVQZ8lbQvuf/view?usp=sharing
+    JI-Net : https://drive.google.com/file/d/1VnJoyUOuDPbP82kgqznoZlKSaZ7QdaiZ/view?usp=sharing
     
-    LSTM : https://drive.google.com/file/d/1H_pcOb0HC7XAw6Xc3QLtx66a4QF1ByOn/view?usp=sharing
+    LSTM : https://drive.google.com/file/d/1jkGdbSqfP7Pc9CyFxNT6aAAam1pWyA_X/view?usp=sharing
 
 ## Qualitative results
 
@@ -104,7 +110,7 @@
 @inproceedings{ycyoon2020,
   title={Online Multiple Pedestrians Tracking using Deep Temporal Appearance Matching Association},
   author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
-  year={2020},
+  year={2021},
   booktitle={Information Sciences}
 }
 ```

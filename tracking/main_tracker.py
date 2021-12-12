@@ -1,14 +1,18 @@
-import os
+from copy import deepcopy
+
 import numpy as np
 from scipy.optimize import linear_sum_assignment
-from copy import deepcopy
 import cv2
-from tracking.track_state import trackState
-from utils.tools import iou, nms, normalization, separate_measure
+
+from tracking.track_state import TrackState
+from utils.tools import iou, det_preprocessing, normalization, separate_measure
 from dnn.neural_net import neuralNet
 
 
-class track:
+class Track:
+    """
+    Main tracking class to perform tracking
+    """
     def __init__(self, seq_name, seq_info, data, config, semi_on, fr_delay, visualization=False):
         # Save recent 5-images to save the processing time of new hyp init
         self.imgs = []
@@ -25,7 +29,7 @@ class track:
         self.img_shp = seq_info[0:2]
         self.fps = seq_info[2]
         self.config = config
-        self.NN = neuralNet(is_test=True)
+        self.NN = neuralNet(is_test=True, train_mode='', config=config)
 
         self.semi_on = semi_on
         self.fr_delay = fr_delay
@@ -35,8 +39,14 @@ class track:
         print("track deleted")
 
     def track(self, bgr_img, dets, fr_num):
-        # dets : [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
-        dets = self.det_preprocessing(dets, fr_num)
+        """
+        Do tracking
+        :param bgr_img: bgr_img of current frame
+        :param dets: [[x,y,w,h,conf], ..., [x,y,w,h,conf]]
+        :param fr_num: current frame
+        :return: None
+        """
+        dets = det_preprocessing(dets, fr_num, self.config.nms_iou_thresh, self.config.det_thresh)
         self.trk_result.append([])
 
         if len(self.imgs) > self.config.max_hyp_len:
@@ -44,78 +54,15 @@ class track:
         self.imgs.append(bgr_img)
 
         # Track-detection association
-        prev_trk = deepcopy(self.trk_state)
-
-        if len(prev_trk) > 0 and len(dets) > 0:
-            # Get detection templates
-            det_templates = np.zeros((dets.shape[0], 128, 64, 3))
-            for idx, det in enumerate(dets):
-                cropped = bgr_img[det[1]:det[1] + det[3], det[0]:det[0] + det[2]]
-                det_templates[idx, :, :, :] = cv2.resize(cropped, (64, 128))
+        if len(self.trk_state) > 0 and len(dets) > 0:
+            prev_trk = deepcopy(self.trk_state)
 
             # Construct a similarity matrix
-            sim_mat = np.zeros((len(dets), len(prev_trk)))
-            num_matching_templates = []
-
-            # Motion similarity calculation
-            for i, det in enumerate(dets):
-                for j, trk in enumerate(prev_trk):
-                    mot_sim = trk.mahalanobis_distance(det)
-                    mosh_sim = mot_sim * prev_trk[j].get_shp_similarity(dets[i][2:4], fr_num)
-                    if mosh_sim > self.config.gating_thresh:
-                        sim_mat[i,j] = mot_sim
-                        num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
-                    else:
-                        num_matching_templates.append(0)
+            sim_mat, num_matching_templates = self.get_geo_similarity(dets, prev_trk, fr_num)
 
             # Appearance similarity calculation
-            # Pre-calculate the Neural-Net input shape to save time
             if sum(num_matching_templates) > 0:
-                input_templates = np.zeros((sum(num_matching_templates), 128, 64, 6))
-                input_shps = np.zeros((sum(num_matching_templates), 3))
-
-                # Make input batch
-                cur_idx = 0
-                accum_num = 0
-                for i in range(sim_mat.shape[0]):
-                    for j in range(sim_mat.shape[1]):
-                        if sim_mat[i,j] > 0:
-                            matching_tmpls = []
-                            matching_shps = []
-                            anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
-
-                            # Historical appearances
-                            for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps, prev_trk[j].historical_frs):
-                                self.accumulate_app_pairs(matching_tmpls, trk_tmpl, det_templates[i])
-                                self.accumulate_shp_pairs(matching_shps, trk_shp, trk_fr, anchor_shp)
-
-                            # Recent appearance
-                            self.accumulate_app_pairs(matching_tmpls, prev_trk[j].recent_app, det_templates[i])
-                            self.accumulate_shp_pairs(matching_shps, prev_trk[j].recent_shp, prev_trk[j].recent_fr, anchor_shp)
-
-                            input_templates[accum_num:accum_num+num_matching_templates[cur_idx], :, : , :] = np.array(matching_tmpls)
-                            input_shps[accum_num:accum_num+num_matching_templates[cur_idx], :] = np.array(matching_shps)
-                            accum_num += num_matching_templates[cur_idx]
-                        cur_idx += 1
-
-                # JI-Net based matching-feature extraction
-                feature_batch = self.NN.get_feature(input_templates)
-
-                # Create LSTM input batch
-                valid_matching_templates = [i for i in num_matching_templates if i > 0]
-
-                input_batch = np.zeros((sum(num_matching_templates), self.config.lstm_len, 150+3))
-                cur_idx = 0
-
-                for idx, tmp_num in enumerate(valid_matching_templates):
-                    if tmp_num > 0:
-                        tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
-                        input_batch[idx, self.config.lstm_len - tmp_num:, :-3] = tmp_features
-                        input_batch[idx, self.config.lstm_len - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
-                        cur_idx += tmp_num
-
-                # Final appearance likelihood from Deep-TAMA
-                likelihoods = self.NN.get_likelihood(input_batch)
+                likelihoods = self.get_appearance_similarity(dets, prev_trk, sim_mat, num_matching_templates, bgr_img, fr_num)
 
                 cur_idx = 0
                 for i in range(sim_mat.shape[0]):
@@ -131,7 +78,6 @@ class track:
             assoc_det_ind = []
             for trk_ind, det_ind in zip(col_ind, row_ind):
                 if sim_mat[det_ind, trk_ind] > self.config.assoc_thresh:
-                    #print('trk_id : {}'.format(self.trk_state[trk_ind].track_id))
                     y = dets[det_ind]
                     template = cv2.resize(bgr_img[y[1]:y[1] + y[3], y[0]: y[0] + y[2]], (64, 128))
                     self.trk_state[trk_ind].update(dets[det_ind], template, sim_mat[det_ind, trk_ind], fr_num, self.config)
@@ -150,58 +96,22 @@ class track:
         if len(self.hyp_dets) > 0 and len(dets) > 0:
             prev_hyp = deepcopy(self.hyp_dets[-1])
 
-            tmp_hyp_dets = []
-            tmp_hyp_valid = []
-            tmp_hyp_assoc = []
-            if len(dets) > 0 and len(prev_hyp) > 0:
-                for det_ind, det in enumerate(dets):
-                    is_assoc = False
-                    tmp_assoc = []
-                    tmp_conf = []
-
-                    # Hierarchical initialization
-                    for hyp_ind, hyp in enumerate(prev_hyp):
-                        # Strict initialization
-                        iou_score = iou(det, hyp)
-
-                        if iou_score > self.config.assoc_iou_thresh:
-                            is_assoc = True
-                            tmp_assoc.append(hyp_ind)
-                            tmp_conf.append(iou_score)
-                    if is_assoc:
-                        tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a:a[0], reverse=True)]
-                        dets_unassoc[det_ind] = False
-                        tmp_hyp_dets.append(det)
-                        tmp_hyp_valid.append(True)
-                        tmp_hyp_assoc.append(tmp_assoc)
-                    else:
-                        for hyp_ind, hyp in enumerate(prev_hyp):
-                            # Weak initialization
-                            pos_dist, shp_sim = separate_measure(det, hyp)
-                            if pos_dist < det[3]*self.config.assoc_dist_thresh and shp_sim > self.config.assoc_shp_thresh:
-                                is_assoc = True
-                                tmp_assoc.append(hyp_ind)
-                                tmp_conf.append((-pos_dist) + shp_sim)
-                        if is_assoc:
-                            tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a:a[0], reverse=True)]
-                            dets_unassoc[det_ind] = False
-                            tmp_hyp_dets.append(det)
-                            tmp_hyp_valid.append(True)
-                            tmp_hyp_assoc.append(tmp_assoc)
+            # Associate det and hyps
+            tmp_hyp_dets, tmp_hyp_valid, tmp_hyp_assoc = self.init_association(dets, prev_hyp, dets_unassoc)
             self.hyp_dets.append(tmp_hyp_dets)
             self.hyp_valid.append(tmp_hyp_valid)
             self.hyp_assoc.append(tmp_hyp_assoc)
 
-            # Init trk
+            # Init tracks from long hyps
             to_tracks = []
             if len(self.hyp_dets) == self.config.max_hyp_len:
-                for tail_idx, tail_assoc in enumerate(self.hyp_assoc[-1]):
-                    tmp_trk = [tail_idx]
-                    out_trk = self.recursive_find(self.config.max_hyp_len-1, tail_idx, tmp_trk)
+                for root_idx, _ in enumerate(self.hyp_assoc[-1]):
+                    tmp_trk = [root_idx]  # Starting node
+                    out_trk = self.recursive_find(self.config.max_hyp_len-1, root_idx, tmp_trk)
                     if out_trk:
                         tmp_to_track = []
                         for depth, hyp_idx in enumerate(out_trk):
-                            self.hyp_valid[depth][hyp_idx] = False
+                            self.hyp_valid[depth][hyp_idx] = False  # Mark used hyp idxs
                             tmp_to_track.append(self.hyp_dets[depth][hyp_idx])
                         to_tracks.append(tmp_to_track)
 
@@ -209,20 +119,20 @@ class track:
             if len(to_tracks) > 0:
                 for to_track in to_tracks:
                     concat_img = np.zeros((128, 0, 3), dtype=float)
-
+                    tmp_trk = None
                     for i, y in enumerate(to_track):
                         tmp_fr = fr_num - self.config.max_hyp_len + i + 1
                         template = cv2.resize(self.imgs[i][y[1]:y[1] + y[3], y[0]:y[0] + y[2]], (64, 128))
                         concat_img = np.concatenate((concat_img, template), 1)
                         if i == 0:
-                            tmp_trk = trackState(y, template, tmp_fr, self.max_id, self.config)
+                            tmp_trk = TrackState(y, template, tmp_fr, self.max_id, self.config)
                             self.max_id += 1
                         else:
                             tmp_trk.predict(tmp_fr, self.config)
                             tmp_trk.update(y, template, self.config.hist_thresh, tmp_fr, self.config, is_init=True)
 
-                        # Initialization hypothesis restoration (semi online mode only)
-                        if self.semi_on and i < self.config.max_hyp_len:
+                        # Initialization hypothesis restoration except a current state (semi online mode only)
+                        if self.semi_on and i < self.config.max_hyp_len-1:
                             tmp_state = tmp_trk.save_info(tmp_fr)
                             self.trk_result[tmp_fr-1].append(tmp_state)
 
@@ -259,7 +169,114 @@ class track:
         for trk in self.trk_state:
             trk.predict(fr_num+1, self.config)
 
+    def get_geo_similarity(self, dets, prev_trk, fr_num):
+        """
+        Calculate geometric likelihoods and return gated matrix
+        :param dets: detections
+        :param prev_trk: existing tracks
+        :param fr_num: current frame number
+        :return: likelihood matrix, list containing sequence length of each track
+        """
+        sim_mat = np.zeros((len(dets), len(prev_trk)))
+        num_matching_templates = []
+
+        # Motion similarity calculation
+        for i, det in enumerate(dets):
+            for j, trk in enumerate(prev_trk):
+                if self.config.gating_method == 'iou':
+                    mot_sim = iou(det, trk.bbox_info(fr_num))
+                    gated = mot_sim < self.config.gating_thresh
+                elif self.config.gating_method == 'mahalanobis':
+                    mot_sim = trk.mahalanobis_similarity(det)
+                    shp_sim = trk.get_shp_similarity(det[2:4], fr_num)
+                    gated = mot_sim*shp_sim < self.config.gating_thresh
+                else:
+                    raise NotImplementedError
+                if not gated:
+                    sim_mat[i, j] = mot_sim
+                    num_matching_templates.append(len(prev_trk[j].historical_app) + 1)
+                else:
+                    num_matching_templates.append(0)
+        return sim_mat, num_matching_templates
+
+    def get_appearance_similarity(self, dets, prev_trk, sim_mat, num_matching_templates, bgr_img, fr_num):
+        """
+        Calculate appearance likelihoods
+        :param dets: detections
+        :param prev_trk: existing tracks
+        :param sim_mat: current likelihood matrix
+        :param num_matching_templates: list containing sequence length of each track
+        :param bgr_img: bgr image
+        :param fr_num: current frame number
+        :return: appearance likelihood matrix
+        """
+        # Pre-calculate a Neural-Net input shape to a save time
+        input_templates = np.zeros((sum(num_matching_templates), 128, 64, 6))
+        input_shps = np.zeros((sum(num_matching_templates), 3))
+
+        # Get detection templates
+        det_templates = np.zeros((dets.shape[0], 128, 64, 3))
+        for idx, det in enumerate(dets):
+            cropped = bgr_img[det[1]:det[1] + det[3], det[0]:det[0] + det[2]]
+            det_templates[idx, :, :, :] = cv2.resize(cropped, (64, 128))
+
+        # Make input batch
+        batch_sz = 0
+        cur_idx = 0
+        accum_num = 0
+        for i in range(sim_mat.shape[0]):
+            for j in range(sim_mat.shape[1]):
+                if sim_mat[i, j] > 0:
+                    matching_tmpls = []
+                    matching_shps = []
+                    anchor_shp = np.array([fr_num, *list(dets[i][2:4])], dtype=float)
+
+                    # Historical appearances
+                    for trk_tmpl, trk_shp, trk_fr in zip(prev_trk[j].historical_app, prev_trk[j].historical_shps,
+                                                         prev_trk[j].historical_frs):
+                        self.accumulate_app_pairs(matching_tmpls, trk_tmpl, det_templates[i])
+                        self.accumulate_shp_pairs(matching_shps, trk_shp, trk_fr, anchor_shp)
+
+                    # Recent appearance
+                    self.accumulate_app_pairs(matching_tmpls, prev_trk[j].recent_app, det_templates[i])
+                    self.accumulate_shp_pairs(matching_shps, prev_trk[j].recent_shp, prev_trk[j].recent_fr, anchor_shp)
+
+                    input_templates[accum_num:accum_num + num_matching_templates[cur_idx], :, :, :] = np.array(
+                        matching_tmpls)
+                    input_shps[accum_num:accum_num + num_matching_templates[cur_idx], :] = np.array(matching_shps)
+                    accum_num += num_matching_templates[cur_idx]
+                    batch_sz += 1
+                cur_idx += 1
+
+        # JI-Net based matching-feature extraction
+        feature_batch = self.NN.get_feature(input_templates)
+
+        # Create LSTM input batch
+        valid_matching_templates = [i for i in num_matching_templates if i > 0]
+
+        input_batch = np.zeros((len(valid_matching_templates), self.config.lstm_len, 150 + 3))
+        cur_idx = 0
+
+        for idx, tmp_num in enumerate(valid_matching_templates):
+            tmp_features = feature_batch[cur_idx:cur_idx + tmp_num]
+            input_batch[idx, self.config.lstm_len - tmp_num:, :-3] = tmp_features
+            input_batch[idx, self.config.lstm_len - tmp_num:, -3:] = input_shps[cur_idx:cur_idx + tmp_num]
+            cur_idx += tmp_num
+
+        # Final appearance likelihood from Deep-TAMA
+        likelihoods = self.NN.get_likelihood(input_batch)
+
+        return likelihoods
+
     def accumulate_shp_pairs(self, to_list, trk_shp, trk_fr, anchor_shp):
+        """
+        Accumulate pair of shape and frame
+        :param to_list: accumulation list
+        :param trk_shp: track shape
+        :param trk_fr: Corresponding frame number of the track shape
+        :param anchor_shp: anchor detection shape
+        :return: None
+        """
         trk_shp = np.array([trk_fr, *list(trk_shp)])
         matching_shp = trk_shp - anchor_shp
         matching_shp[0] /= self.fps
@@ -267,26 +284,73 @@ class track:
         to_list.append(matching_shp)
 
     def accumulate_app_pairs(self, to_list, app_pair1, app_pair2):
+        """
+        Append pair of templates
+        :param to_list: accumulation list
+        :param app_pair1: template 1
+        :param app_pair2: template 2
+        :return: None
+        """
         matching_tmpl = np.concatenate((normalization(app_pair1), normalization(app_pair2)), 2)
         to_list.append(matching_tmpl)
 
-    def det_preprocessing(self, dets, fr_num):
-        if len(dets) > 0:
-            dets = dets[:, 1:6]
-            for i in range(dets.shape[0]):
-                dets[i][dets[i] < 0] = 0
-                #dets[i][2] = max(0, min(dets[i][2], self.img_shp[0]-dets[i][0]))
-                #dets[i][3] = max(0, min(dets[i][3], self.img_shp[1]-dets[i][1]))
-            dets = np.hstack((dets, np.ones((dets.shape[0], 1)) * fr_num))
-            keep = nms(dets, self.config.nms_iou_thresh)
-            dets = dets[keep]
-            dets = dets[dets[:, 5] > self.config.det_thresh].astype(int)
-        else:
-            dets = []
+    def init_association(self, dets, prev_hyp, dets_unassoc):
+        """
+        Associate remaining dets and potential tracks
+        :param dets: dets
+        :param prev_hyp: previous potential tracks
+        :param dets_unassoc: boolean list
+        :return: associated dets, validity of each hyp, associated hyps for each det
+        """
+        tmp_hyp_dets = []
+        tmp_hyp_valid = []
+        tmp_hyp_assoc = []
+        if len(dets) > 0 and len(prev_hyp) > 0:
+            for det_ind, det in enumerate(dets):
+                is_assoc = False
+                tmp_assoc = []
+                tmp_conf = []
 
-        return dets
+                # Hierarchical initialization
+                for hyp_ind, hyp in enumerate(prev_hyp):
+                    # Strict matching
+                    iou_score = iou(det, hyp)
+
+                    if iou_score > self.config.assoc_iou_thresh:
+                        is_assoc = True
+                        tmp_assoc.append(hyp_ind)
+                        tmp_conf.append(iou_score)
+                if is_assoc:
+                    tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a: a[0], reverse=True)]
+                    dets_unassoc[det_ind] = False
+                    tmp_hyp_dets.append(det)
+                    tmp_hyp_valid.append(True)
+                    tmp_hyp_assoc.append(tmp_assoc)
+                else:
+                    for hyp_ind, hyp in enumerate(prev_hyp):
+                        # Weak matching
+                        pos_dist, shp_sim = separate_measure(det, hyp)
+                        if pos_dist < det[3] * self.config.assoc_dist_thresh and shp_sim > self.config.assoc_shp_thresh:
+                            is_assoc = True
+                            tmp_assoc.append(hyp_ind)
+                            tmp_conf.append((-pos_dist) + shp_sim)
+                    if is_assoc:
+                        tmp_assoc = [_x for _, _x in sorted(zip(tmp_conf, tmp_assoc), key=lambda a: a[0], reverse=True)]
+                        dets_unassoc[det_ind] = False
+                        tmp_hyp_dets.append(det)
+                        tmp_hyp_valid.append(True)
+                        tmp_hyp_assoc.append(tmp_assoc)
+
+        return tmp_hyp_dets, tmp_hyp_valid, tmp_hyp_assoc
 
     def recursive_find(self, _depth, assoc_idx, _tmp_trk):
+        """
+        Recursively find valid track in hypothesis tree
+        :param _depth: current tree depth
+        :param assoc_idx: associated idx
+        :param _tmp_trk: temporally created tracklet during tree traversal
+        :return: valid track or empty list
+        """
         if _depth == 0:
             return _tmp_trk
 
@@ -300,7 +364,11 @@ class track:
         return []
 
     def track_interpolation(self, cur_fr):
-        # Interpolate holes within an each track
+        """
+        Interpolate holes within an each track
+        :param cur_fr: current frame number
+        :return: None
+        """
         cur_delay = min(self.fr_delay, cur_fr-1)
         for anchor_trk in self.trk_result[-1]:
             if cur_fr <= cur_delay:
@@ -340,6 +408,11 @@ class track:
                     self.trk_result[-1-i].append(intp_trk[-i])
 
     def track_save(self, fr_num):
+        """
+        Append valid track states to the result list
+        :param fr_num: frame number
+        :return: None
+        """
         tmp_save = []
         valid_miss_num = 1
         if len(self.trk_state) > 0:

@@ -1,14 +1,14 @@
 import os
 import time
-from utils import data_loader as ds
-from tracking.config import config
-from tracking.main_tracker import track
-import cv2
 import math
+import argparse
+
+import cv2
 import numpy as np
 
-
-seqlist_path = "sequence_groups"
+from utils.data_loader import Data
+from config import Config
+from tracking.main_tracker import Track
 
 
 def track_write_result(trk_cls, _seq_name, _fr_list):
@@ -41,22 +41,28 @@ def track_write_image(trk_cls, _seq_name, _data, _fr_list, trj_len=1):
         cv2.imwrite(os.path.join('results', _seq_name, '{}.png'.format(_fr_list[fr_num-1])), _bgr_img)
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
+    parse = argparse.ArgumentParser()
+    parse.add_argument('--set_fps', action='store_true', help='Use manually configured FPS')
+    parse.add_argument('--new_fps', default=5, type=int, help='Manually configured FPS (used for --set_fps)')
+    parse.add_argument('--semi_on', action='store_true', help='Use semi-online mode')
+    parse.add_argument('--seqlist_name', default='seq_list2.txt', type=str, help='Sequence list name')
+    parse.add_argument('--seqlist_path', default='sequence_groups', type=str, help='Sequence group')
+    parse.add_argument('--last_fr', default=-1, type=int, help='set last frame manually (-1 for default)')
+    parse.add_argument('--draw', action='store_true', help='Draw tracking results')
+    cmd_line = ['--semi_on', '--draw']
+    opts = parse.parse_args(cmd_line)
+    print("<Argument options>")
+    print(opts)
 
-    # Manually set the FPS to simulate real-time tracking
-    set_fps = False
-    new_fps = 5
-
-    # Set the semi-online mode True for better tracking performance
-    # 1. Initialization hypotesis restoration
-    # 2. Track interpolation
-    # Note : Semi-online mode will lead to a delay of a few frames (Set between 5 ~ 30)
-    semi_on = True
-    # fr_delay = 30
-
+    """
+    Set the semi-online mode True for better tracking performance
+    1. Initialization hypothesis restoration
+    2. Track interpolation
+    Note : Semi-online mode outputs delayed results (Set between 5 ~ 30)
+    """
     # Set the name of sequences for tracking
-    seqlist_name = "seq_list4.txt"
-    seq_file_path = os.path.join(seqlist_path, seqlist_name)
+    seq_file_path = os.path.join(opts.seqlist_path, opts.seqlist_name)
     lines = [line.rstrip('\n').split(' ') for line in open(seq_file_path) if len(line) > 1]
     seq_names = []
     det_threshes = []
@@ -67,7 +73,8 @@ if __name__=="__main__":
     print(seq_names)
     print(det_threshes)
 
-    data = ds.data(is_test=True, seq_names=seq_names)
+    _config = Config()
+    data = Data(seq_path=_config.seq_path, is_test=True, seq_names=seq_names)
 
     tot_fr = 0
     tot_time = 0
@@ -81,17 +88,18 @@ if __name__=="__main__":
         seq_info = data.get_seq_info(seq_name=seq_name)
 
         fr_intv = 1
-        if set_fps:
-            assert seq_info[2] >= new_fps, "new FPS should be equal or smaller than original FPS"
-            fr_intv = math.ceil(seq_info[2]/new_fps)
+        # Set new frame interval based on manually configured FPS
+        if opts.set_fps:
+            assert seq_info[2] >= opts.new_fps, "new FPS should be equal or smaller than original FPS"
+            fr_intv = math.ceil(seq_info[2]/opts.new_fps)
             seq_info[2] = math.ceil(seq_info[2]/fr_intv)
 
         # Get tracking parameters
-        _config = config(seq_info[2])
+        _config.fps = seq_info[2]
         _config.det_thresh = det_threshes[idx]
         fr_delay = _config.miss_thresh-1
 
-        _track = track(seq_name, seq_info, data, _config, semi_on = semi_on, fr_delay = fr_delay, visualization=False)
+        _track = Track(seq_name, seq_info, data, _config, semi_on=opts.semi_on, fr_delay=fr_delay, visualization=False)
 
         # Fake inference to prevent a slow initial inference
         fake_input1 = np.ones((100, 128, 64, 6))
@@ -104,13 +112,18 @@ if __name__=="__main__":
         print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(_config.assoc_iou_thresh, _config.assoc_shp_thresh,
                                                                     _config.assoc_dist_thresh))
 
-        # Start tracking
-        # cur_fr : sequential frame number [1, 2, 3, ....]
-        # actual_fr : actual frame number of sequence [1, 1+frame_interval, 1+2*frame_interval, ...]
-        # if set_fps == False : cur_fr == actual_fr
+        """
+        Start tracking
+        cur_fr : sequential frame number [1, 2, 3, ....]
+        actual_fr : actual frame number of sequence [1, 1+frame_interval, 1+2*frame_interval, ...]
+        if set_fps == False, cur_fr == actual_fr
+        """
         fr_list = []
         cur_fr = 0
         cur_time = 0
+
+        if opts.last_fr > 0: seq_info[-1] = opts.last_fr
+
         # seq_info[-1] = 80
         for actual_fr in range(1, int(seq_info[-1])+1):
             if actual_fr > 1 and (actual_fr-1) % fr_intv != 0:
@@ -130,7 +143,8 @@ if __name__=="__main__":
         tot_time += cur_time
         print('Average processing time : {} Sec/Frame'.format(cur_time/cur_fr))
         track_write_result(_track, seq_name, fr_list)
-        track_write_image(_track, seq_name, data, fr_list, trj_len=seq_info[2]*20)
+        if opts.draw:
+            track_write_image(_track, seq_name, data, fr_list, trj_len=seq_info[2]*20)
 
     print('Total processing time : {} Sec'.format(tot_time))
     print('Total average processing time : {} Sec/Frame'.format(tot_time / tot_fr))
