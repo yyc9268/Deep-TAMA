@@ -5,8 +5,9 @@
 
 <img src="/images/framework.png" height="300"> 
 
-#### TO DO
+## To Do
 * ~~Code refactoring (12/12)~~
+* Tensorboard callback override to log in a single file
 * Two initialization methods (MHT, association-based)
 * Tracking evaluation code
 * Demo tracking sequence update
@@ -27,20 +28,15 @@
     
 ## Sample tracking dataset structure
     - Set the dataset folder as following structure
-     
-     MOT
-      |__ TUD-Stadtmitte
-      |         |__ det
-      |         |__ gt
-      |         |__ img1
-      |
-      |__ MOT16-02
-      |
-      |__ Custom_Seuqnce
-      .
-      .
-      .
-      
+      ex) MOT
+          |__ TUD-Stadtmitte
+          |         |__ det
+          |         |__ gt
+          |         |__ img1
+          |__ MOT16-02
+          |__ Custom_Seuqnce
+          .
+          .
     - We recommend to copy-and-paste all MOTChallenge sequences in MOT folder
       
 ## Tracking settings
