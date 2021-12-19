@@ -195,15 +195,15 @@ class Data:
 
         return img
 
-    def print_progress_bar(self, cur_sz, max_sz, step_sz=20):
+    def print_progress_bar(self, cur_sz, max_sz, step_sz=10):
         step_intv = max_sz // step_sz
         if cur_sz // step_intv > self.prev_step:
             self.prev_step += 1
             print('({:06d} / {:06d}) ||'.format(cur_sz, max_sz), end='')
             for _ in range(self.prev_step):
-                print('=', end='')
+                print('==', end='')
             for _ in range(self.prev_step, step_sz):
-                print(' ', end='')
+                print('  ', end='')
             print('||')
 
     def create_jinet_batch(self, batch_sz, train_val):

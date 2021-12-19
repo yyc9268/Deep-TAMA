@@ -7,8 +7,7 @@
 
 ## To Do
 * ~~Code refactoring (12/12)~~
-* Tensorboard callback override to log in a single file
-* Two initialization methods (MHT, association-based)
+* ~~Two initialization methods (MHT, association-based)~~
 * Tracking evaluation code
 * Demo tracking sequence update
 
@@ -54,9 +53,10 @@
 
 4. Perform tracking using 'tracking_demo.py'.
     * tracking thresholds can be controlled by modifying 'config.py'.
-    * There exist two mode on-off variables in 'tracking_demo.py'.
+    * There exist a few mode on-off variables in 'tracking_demo.py'.
         * 'set_fps' : manipulates an FPS and drop frames of videos
         * 'semi_on' : improves a tracking performance using interpolation and restoration
+        * 'init_mode' : 'mht' (faster, geometry-based), 'delayed' (geometry + appearance)
 
 ## Training settings
 1. Set the data as same as 'Tracking settings' above.

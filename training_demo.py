@@ -40,10 +40,13 @@ class CustomCheckpoint(ModelCheckpoint):
         """
         Overriding to modify checkpoint saving frequency
         """
-        if isinstance(self.save_freq, int) and (epoch % self.save_freq == 0):
+        if epoch % self.period == 0:
             self.save_freq = 'epoch'  # To prevent a duplicate call during a same epoch
+            filepath_prefix = self.filepath
             self.filepath += '{}.h5'.format(str(epoch))
             super()._save_model(epoch, logs)
+            print('model saved at : {}'.format(self.filepath))
+            self.filepath = filepath_prefix
 
 
 def train_jinet(nn_cls, continue_epoch, config):
@@ -56,23 +59,29 @@ def train_jinet(nn_cls, continue_epoch, config):
     tf_log_dir = os.path.join(log_dir, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
     dataCls = Data(config.seq_path, is_test=False)
-    val_x_batch, val_y_batch = dataCls.get_jinet_batch(config.model[model_name]['epoch_batch_len'], 'validation')
-    validate_sample(val_x_batch, val_y_batch, None, 5, model_name, log_dir)
+    np_val_path = os.path.join(config.np_val_dir, '{}_val.npz'.format(model_name))
+    if not os.path.exists(np_val_path):
+        print("Load new validation data")
+        val_x_batch, val_y_batch = dataCls.get_jinet_batch(config.model[model_name]['epoch_batch_len']*2, 'validation')
+        np.savez(np_val_path, x_batch=val_x_batch, y_batch=val_y_batch)
+    val_dict = np.load(np_val_path)
+    val_x_batch, val_y_batch = val_dict['x_batch'], val_dict['y_batch']
 
-    # Create validation batch
-    val_idx = [i for i in range(len(val_x_batch))]
-    random.shuffle(val_idx)
+    validate_sample(val_x_batch, val_y_batch, None, 5, model_name, log_dir)
 
     scheduler = Scheduler(decay_rate=0.99, decay_step=config.model[model_name]['repeat'])
     lr_callback = LearningRateScheduler(scheduler.exponential_scheduler)
-    sgd = SGD(learning_rate=config.model[model_name]['init_lr'], momentum=0.9)
+    init_lr = config.model[model_name]['init_lr'] * 0.99**((continue_epoch-1) / config.model[model_name]['repeat'])
+    sgd = SGD(learning_rate=init_lr, momentum=0.9, nesterov=True)
     nn_cls.nets[model_name].compile(loss=tf.keras.losses.categorical_crossentropy, optimizer=sgd, metrics=['accuracy'])
 
     tensorboard_callback = TensorBoard(log_dir=tf_log_dir)
+    checkpoint_path = os.path.join(config.model_dir, '{}-'.format(config.model[model_name]['save_name']))
+    checkpoint_callback = CustomCheckpoint(filepath=checkpoint_path, period=config.model[model_name]['log_intv'])
 
+    print("Evaluate JI-Net")
+    nn_cls.nets[model_name].evaluate(val_x_batch, val_y_batch, batch_size=32)
     for step in range(continue_epoch, config.model[model_name]['tot_epoch'] + 1, config.model[model_name]['repeat']):
-        checkpoint_path = os.path.join(config.model_dir, '{}-'.format(config.model[model_name]['save_name']))
-        checkpoint_callback = CustomCheckpoint(filepath=checkpoint_path, save_freq=config.model[model_name]['log_intv'])
         cur_lr = nn_cls.nets[model_name].optimizer.lr.numpy()
         print("Train epoch : {}, Learning rate : {}".format(step, cur_lr))
         train_x_batch, train_y_batch = dataCls.get_jinet_batch(config.model[model_name]['epoch_batch_len'], 'train')
@@ -81,9 +90,10 @@ def train_jinet(nn_cls, continue_epoch, config):
         train_idx = [i for i in range(len(train_x_batch))]
         random.shuffle(train_idx)
 
-        nn_cls.nets[model_name].fit(train_x_batch[train_idx], train_y_batch[train_idx], batch_size=config.model[model_name]['train_batch_len'],
-                         epochs=step + config.model[model_name]['repeat'], initial_epoch=step,
-                         validation_data=(val_x_batch[val_idx], val_y_batch[val_idx]),
+        nn_cls.nets[model_name].fit(train_x_batch[train_idx], train_y_batch[train_idx],
+                                    batch_size=config.model[model_name]['train_batch_len'],
+                                    epochs=step + config.model[model_name]['repeat'], initial_epoch=step,
+                                    validation_data=(val_x_batch, val_y_batch),
                                     validation_freq=config.model[model_name]['log_intv'],
                                     callbacks=[lr_callback, tensorboard_callback, checkpoint_callback])
         gc.collect()  # To prevent memory leak in tf2.1
@@ -99,23 +109,33 @@ def train_lstm(nn_cls, continue_epoch, config):
     tf_log_dir = os.path.join(log_dir, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
 
     dataCls = Data(config.seq_path)
-    val_img_batch, val_shp_batch, val_y_batch, val_trk_len = dataCls.get_deeptama_batch(
-        nn_cls.max_trk_len, config.model[model_name]['epoch_batch_len'], 'validation')
+    np_val_path = os.path.join(config.np_val_dir, '{}_val.npz'.format(model_name))
+    if not os.path.exists(np_val_path):
+        print("Load new validation data")
+        val_img_batch, val_shp_batch, val_y_batch, val_trk_len = dataCls.get_deeptama_batch(
+            nn_cls.max_trk_len, config.model[model_name]['epoch_batch_len']*2, 'validation')
+        np.savez(np_val_path, img_batch=val_img_batch, shp_batch=val_shp_batch, y_batch=val_y_batch, trk_len=val_trk_len)
+    val_dict = np.load(np_val_path)
+    val_img_batch, val_shp_batch, val_y_batch, val_trk_len = val_dict['img_batch'], val_dict['shp_batch'],\
+                                                            val_dict['y_batch'], val_dict['trk_len']
     validate_sample(val_img_batch, val_y_batch, val_shp_batch, 5, model_name, log_dir)
 
     # Create validation batch
-    val_x_batch, val_idx = nn_cls.create_lstm_input(val_img_batch, val_shp_batch, val_trk_len)
+    val_x_batch, val_idx = nn_cls.create_lstm_input(val_img_batch, val_shp_batch, val_trk_len, is_test=True)
 
     scheduler = Scheduler(decay_rate=0.99, decay_step=config.model[model_name]['repeat'])
     lr_callback = LearningRateScheduler(scheduler.exponential_scheduler)
-    sgd = SGD(learning_rate=config.model[model_name]['init_lr'], momentum=0.9)
+    init_lr = config.model[model_name]['init_lr'] * 0.99 ** ((continue_epoch-1) / config.model[model_name]['repeat'])
+    sgd = SGD(learning_rate=init_lr, momentum=0.9, nesterov=True)
     nn_cls.nets[model_name].compile(loss=tf.keras.losses.categorical_crossentropy, optimizer=sgd, metrics=['accuracy'])
 
     tensorboard_callback = TensorBoard(log_dir=tf_log_dir)
+    checkpoint_path = os.path.join(config.model_dir, '{}-'.format(config.model[model_name]['save_name']))
+    checkpoint_callback = CustomCheckpoint(filepath=checkpoint_path, period=config.model[model_name]['log_intv'])
 
+    print("Evaluate LSTM")
+    nn_cls.nets[model_name].evaluate(val_x_batch[val_idx], val_y_batch[val_idx], batch_size=32)
     for step in range(continue_epoch, config.model[model_name]['tot_epoch'] + 1, config.model[model_name]['repeat']):
-        checkpoint_path = os.path.join(config.model_dir, '{}-'.format(config.model[model_name]['save_name']))
-        checkpoint_callback = CustomCheckpoint(filepath=checkpoint_path, save_freq=config.model[model_name]['log_intv'])
         cur_lr = nn_cls.nets[model_name].optimizer.lr.numpy()
         print("Train epoch : {}, Learning rate : {}".format(step, cur_lr))
         train_img_batch, train_shp_batch, train_label_batch, train_trk_len = dataCls.get_deeptama_batch(
@@ -128,7 +148,7 @@ def train_lstm(nn_cls, continue_epoch, config):
                                     epochs=step + config.model[model_name]['repeat'], initial_epoch=step,
                                     validation_data=(val_x_batch[val_idx], val_y_batch[val_idx]),
                                     validation_freq=config.model[model_name]['log_intv'],
-                                callbacks=[lr_callback, tensorboard_callback, checkpoint_callback])
+                                    callbacks=[lr_callback, tensorboard_callback, checkpoint_callback])
         gc.collect()  # To prevent memory leak in tf2.1
 
 
@@ -225,8 +245,9 @@ def main():
                         help='Epoch from which JINet training starts')
     parser.add_argument('--lstm_continue_epoch', '-lce', default=0, type=int,
                         help='Epoch from which LSTM training starts')
-    cmd = ['-tj', '-tl']
-    # cmd = ['-tl']
+
+    # cmd = ['-tj', '-tl']
+    cmd = ['-tl']
     opts = parser.parse_args(cmd)
 
     config = Config()

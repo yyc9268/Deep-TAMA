@@ -5,5 +5,8 @@ log/
 batch_test_demo.py
 create_new_gt_demo.py
 
+.idea/
 __pycache__/
 *.pyc
+*.npz
+*.h5

@@ -46,6 +46,7 @@ if __name__ == "__main__":
     parse.add_argument('--set_fps', action='store_true', help='Use manually configured FPS')
     parse.add_argument('--new_fps', default=5, type=int, help='Manually configured FPS (used for --set_fps)')
     parse.add_argument('--semi_on', action='store_true', help='Use semi-online mode')
+    parse.add_argument('--init_mode', default='mht', type=str, help='Track initialization method (mht, delay)')
     parse.add_argument('--seqlist_name', default='seq_list2.txt', type=str, help='Sequence list name')
     parse.add_argument('--seqlist_path', default='sequence_groups', type=str, help='Sequence group')
     parse.add_argument('--last_fr', default=-1, type=int, help='set last frame manually (-1 for default)')
@@ -73,8 +74,10 @@ if __name__ == "__main__":
     print(seq_names)
     print(det_threshes)
 
-    _config = Config()
-    data = Data(seq_path=_config.seq_path, is_test=True, seq_names=seq_names)
+    config = Config()
+    config.semi_on = opts.semi_on
+    config.init_mode = opts.init_mode
+    data = Data(seq_path=config.seq_path, is_test=True, seq_names=seq_names)
 
     tot_fr = 0
     tot_time = 0
@@ -95,22 +98,22 @@ if __name__ == "__main__":
             seq_info[2] = math.ceil(seq_info[2]/fr_intv)
 
         # Get tracking parameters
-        _config.fps = seq_info[2]
-        _config.det_thresh = det_threshes[idx]
-        fr_delay = _config.miss_thresh-1
+        config.fps = seq_info[2]
+        config.det_thresh = det_threshes[idx]
+        fr_delay = config.miss_thresh-1
 
-        _track = Track(seq_name, seq_info, data, _config, semi_on=opts.semi_on, fr_delay=fr_delay, visualization=False)
+        _track = Track(seq_name, seq_info, data, config, fr_delay=fr_delay, visualization=False)
 
         # Fake inference to prevent a slow initial inference
         fake_input1 = np.ones((100, 128, 64, 6))
-        fake_input2 = np.ones((100, _config.lstm_len, 153))
+        fake_input2 = np.ones((100, config.lstm_len, 153))
         feature_batch = _track.NN.get_feature(fake_input1)
         likelihoods = _track.NN.get_likelihood(fake_input2)
 
         print("{}".format(seq_name))
         print("frame interval : {}, fps : {}".format(fr_intv, seq_info[2]))
-        print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(_config.assoc_iou_thresh, _config.assoc_shp_thresh,
-                                                                    _config.assoc_dist_thresh))
+        print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(config.assoc_iou_thresh, config.assoc_shp_thresh,
+                                                                    config.assoc_dist_thresh))
 
         """
         Start tracking

@@ -35,26 +35,33 @@ class neuralNet:
         model_names = {'lstm', 'jinet'}
         self.nets = {'lstm': Model(inputs=self.lstm_input, outputs=self.deeptama_output()),
                      'jinet': Model(inputs=self.img_input, outputs=self.jinet_output())}
-        self.featureExtractor = Model(inputs=self.nets['jinet'].inputs,
-                                      outputs=self.nets['jinet'].get_layer('matching_feature').output)
+
         if is_test:
             for model_name in model_names:
-                self.nets[model_name] = load_model(self._save_dir + '/{}-{}.h5'.format(
-                    config.model[model_name]['save_name'], config.model[model_name]['tot_epoch']))
+                self.load_model(model_name, config.model[model_name]['save_name'], config.model[model_name]['tot_epoch'])
         else:
             if train_mode == 'jinet':
                 if continue_epoch > 0:
-                    self.nets['jinet'] = load_model(self._save_dir + '/{}-{}.h5'.format(config.jinet_model_name, continue_epoch))
+                    self.load_model('jinet', config.model['jinet']['save_name'], continue_epoch)
             elif train_mode == 'lstm':
-                self.nets['jinet'] = load_model(
-                    self._save_dir + '/{}-{}.h5'.format(config.jinet_model_name, config.model['jinet']['tot_epoch']))
+                self.load_model('jinet', config.model['jinet']['save_name'], config.model['jinet']['tot_epoch'])
                 if continue_epoch > 0:
-                    self.nets['lstm'] = load_model(self._save_dir + '/{}-{}.h5'.format(config.lstm_model_name, continue_epoch))
+                    self.load_model('lstm', config.model['lstm']['save_name'], continue_epoch)
             else:
                 raise NotImplementedError
 
+        self.featureExtractor = Model(inputs=self.nets['jinet'].inputs,
+                                      outputs=self.nets['jinet'].get_layer('matching_feature').output)
+
     def __del__(self):
         print("neural-net deleted")
+
+    def load_model(self, model_name, save_name, epoch):
+        """
+        Load model
+        """
+        self.nets[model_name] = load_model(self._save_dir + '/{}-{}.h5'.format(save_name, epoch))
+        print('Loaded : ', self._save_dir + '/{}-{}.h5'.format(save_name, epoch))
 
     def plot_model(self, model_name=''):
         """
@@ -84,10 +91,13 @@ class neuralNet:
         relu3 = Activation('relu')(bnorm3)
         pool3 = MaxPool2D()(relu3)
         flattened = Flatten()(pool3)
-        encode4 = Dense(1152, activation='relu')(flattened)
-        # Used tanh to maximize representation value range
-        encode5 = Dense(self.matching_feature_sz, activation='tanh', name='matching_feature')(encode4)
-        logit = Dense(2)(encode5)
+        encode4 = Dense(1152)(flattened)
+        bnorm4 = BatchNormalization()(encode4)
+        relu4 = Activation('relu')(bnorm4)
+        encode5 = Dense(self.matching_feature_sz)(relu4)
+        bnorm5 = BatchNormalization()(encode5)
+        relu5 = Activation('relu', name='matching_feature')(bnorm5)
+        logit = Dense(2)(relu5)
         likelihood = Softmax()(logit)
 
         return likelihood
@@ -97,16 +107,20 @@ class neuralNet:
         LSTM network structure (The implementation is different from the paper)
         :return: likelihood of input sequence
         """
-        encode1 = Dense(256, activation='tanh')(self.lstm_input)  # 153 -> 256
-        lstm_out = RNN(LSTMCell(128), return_sequences=False, go_backwards=False)(encode1)
+        encode1 = Dense(153)(self.lstm_input)  # 153 -> 153
+        bnorm1 = BatchNormalization()(encode1)
+        tanh1 = Activation('tanh')(bnorm1)
+        lstm_out = RNN(LSTMCell(128), return_sequences=False, go_backwards=False)(tanh1)
         # concatenated = Bidirectional(layer=LSTM(128, return_sequences=True,), merge_mode='concat')(encode1)
-        decode1 = Dense(128, activation='relu')(lstm_out)
-        logit = Dense(2)(decode1)
+        decode1 = Dense(64)(lstm_out)
+        bnorm2 = BatchNormalization()(decode1)
+        relu1 = Activation('relu')(bnorm2)
+        logit = Dense(2)(relu1)
         likelihood = Softmax()(logit)
 
         return likelihood
 
-    def create_lstm_input(self, img_batch, shp_batch, trk_len):
+    def create_lstm_input(self, img_batch, shp_batch, trk_len, is_test=False):
         """
         Create LSTM input from sequence of images and shapes.
         :param img_batch: (N, 6, 128, 64, 3)
@@ -135,7 +149,8 @@ class neuralNet:
             cur_idx += j
 
         shuffled_idx = [i for i in range(len(img_batch))]
-        random.shuffle(shuffled_idx)
+        if not is_test:
+            random.shuffle(shuffled_idx)
 
         return input_batch, shuffled_idx
 
