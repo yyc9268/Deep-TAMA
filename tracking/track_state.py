@@ -56,6 +56,7 @@ class TrackState:
         self.recent_app = init_app  # recent appearance which may be unreliable
         self.recent_conf = param.hist_thresh + 0.1
         self.recent_fr = init_fr
+        self.init_fr = init_fr
         self.recent_shp = init_y[2:4]  # width and height
 
         self.historical_app = []  # set of appearances which are reliable
@@ -63,7 +64,7 @@ class TrackState:
         self.historical_frs = []
         self.historical_shps = []
 
-        self.accum_states = []
+        self.init_states = []  # For initial N-frame restoration
 
         self.color = (random.randrange(256), random.randrange(256), random.randrange(256))
         self.track_id = track_id
@@ -75,6 +76,9 @@ class TrackState:
         :param param: track management parameters
         :return: predicted state, covariance
         """
+        if self.track_id < 0:  # Save states before activated
+            self.init_states.append(self.bbox_info(fr-1))
+
         self.X = self.F @ self.X
         self.P = self.F @ self.P @ np.transpose(self.F) + self.Q
 
@@ -174,7 +178,7 @@ class TrackState:
             intp_fr = fr - self.recent_fr
             tmp_pred_shp = (lambda a, b, fr_diff: [a[0] + intp_fr*(a[0]-b[0])/fr_diff, a[1] + intp_fr*(a[1]-b[1])/fr_diff])\
                 (self.recent_shp, self.historical_shps[-1], self.recent_fr - self.historical_frs[-1])
-            pred_shp = (self.recent_shp + tmp_pred_shp)/2
+            pred_shp = (self.recent_shp + tmp_pred_shp)/2  # Blend recent shape and confident shape
 
         return pred_shp
 
