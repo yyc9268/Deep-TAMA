@@ -6,14 +6,13 @@ import cv2
 
 from tracking.track_state import TrackState
 from utils.tools import iou, det_preprocessing, normalization, separate_measure
-from dnn.neural_net import neuralNet
 
 
 class Track:
     """
     Main tracking class to perform tracking
     """
-    def __init__(self, seq_name, seq_info, data, config, fr_delay, visualization=False):
+    def __init__(self, seq_name, seq_info, data, config, fr_delay, nn_cls=None, visualization=False):
         self.imgs = []
 
         self.max_id = 1
@@ -33,14 +32,14 @@ class Track:
         self.img_shp = seq_info[0:2]
         self.fps = seq_info[2]
         self.config = config
-        self.NN = neuralNet(is_test=True, train_mode='', config=config)
+        self.NN = nn_cls
 
         self.semi_on = config.semi_on
         self.fr_delay = fr_delay
         self.visualization = visualization
 
     def __del__(self):
-        print("track deleted")
+        print("[Debug] Track class deleted")
 
     def track(self, bgr_img, dets, fr_num):
         """

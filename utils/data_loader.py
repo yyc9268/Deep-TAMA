@@ -16,7 +16,7 @@ class Data:
         :param seq_names: sequence names for test mode
         """
         if is_test:
-            assert len(seq_names) > 0, "You should set the seq_lists during test"
+            assert len(seq_names) > 0, "seq_names should be given during test"
         # Read sequence name and info
         self.seq_path = seq_path
         self.seq_names, self.train_idxs, self.val_idxs = self.read_seq_names(is_test, seq_lists=seq_names)
@@ -44,7 +44,6 @@ class Data:
         Each sequence consists of float type data.
         :return: list containing data of whole sequences
         """
-
         seq_lists = []
         for seq_name in seq_list:
             if is_test:
@@ -122,7 +121,7 @@ class Data:
         seq_names = []
         train_idxs = []
         val_idxs = []
-        if is_test:
+        if is_test or len(seq_lists) > 0:
             seq_names = seq_lists
         else:
             with open(os.path.join('sequence_groups', 'trainval_group.json')) as json_file:
@@ -406,13 +405,13 @@ class Data:
 
             for idx, pos_det in enumerate(pos_dets):
                 pos_det = np.array(pos_det, dtype='float')
-                if idx == len(pos_dets)-1:
+                pos_det[1:5] = augment_bbox(pos_det[1:5])
+                if train_val == 'train' and len(pos_dets) > 3 and idx == len(pos_dets)-1:
                     pos_det[1:5] = augment_bbox(pos_det[1:5], very_noisy=True)
                 else:
                     pos_det[1:5] = augment_bbox(pos_det[1:5])
 
                 pos_img, is_valid = self.get_cropped_template(seq_name, pos_det[0], pos_det[1:5])
-
                 if not is_valid:
                     is_valid3 = False
                     break

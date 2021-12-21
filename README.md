@@ -8,7 +8,7 @@
 ## To Do
 * ~~Code refactoring (12/12)~~
 * ~~Two initialization methods (MHT, association-based)~~
-* Tracking evaluation code
+* ~~Tracking evaluation code~~
 * Demo tracking sequence update
 
 ## Enviroment

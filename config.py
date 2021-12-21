@@ -76,7 +76,7 @@ class Config:
         self._det_thresh = det_thresh
 
     def calc_fps_parameters(self):
-        print("Recalculate with FPS : {}".format(self.fps))
+        # print("Recalculate thresholds with FPS : {}".format(self.fps))
         self.assoc_iou_thresh = 0.45 * (1.0 / (1.0 + 1.0 * max(0.0, min(0.5, 1.0 / self.fps))))
         self.assoc_shp_thresh = 0.8 * (1.0 / (1.0 + 1.0 * max(0.0, min(0.5, 1.0 / self.fps))))
         self.assoc_dist_thresh = 0.3 * ((1.0 + max(0.0, 1.0 * min(0.5, 1.0 / self.fps))) / 1.0)

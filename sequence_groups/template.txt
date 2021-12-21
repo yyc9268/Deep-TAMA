@@ -1,0 +1,2 @@
+sequence_name1 detetection_confidence_thresh1
+sequence_name2 detetection_confidence_thresh2

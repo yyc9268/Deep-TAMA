@@ -1,0 +1,5 @@
+TUD-Stadtmitte 0.1
+PETS09-S2L1 0.1
+ETH-Bahnhof 0.1
+KITTI-13 0.1
+MOT16-02 0.1
