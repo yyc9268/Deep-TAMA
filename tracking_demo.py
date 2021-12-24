@@ -76,6 +76,8 @@ if __name__ == "__main__":
     parse.add_argument('--new_fps', default=5, type=int, help='Manually configured FPS (used for --set_fps)')
     parse.add_argument('--semi_on', action='store_true', help='Use semi-online mode')
     parse.add_argument('--init_mode', default='mht', type=str, help='Track initialization method (mht, delay)')
+    parse.add_argument('--gating_mode', default='iou', type=str, help='Geometric gating method (iou, maha)')
+    parse.add_argument('--only_motion', action='store_true', help='Use only motion information')
     parse.add_argument('--seqlist_name', default='validation.txt', type=str, help='Sequence list name')
     parse.add_argument('--seqlist_path', default='sequence_groups', type=str, help='Sequence group')
     parse.add_argument('--last_fr', default=-1, type=int, help='set last frame manually (-1 for default)')
@@ -107,12 +109,15 @@ if __name__ == "__main__":
     config = Config()
     config.semi_on = opts.semi_on
     config.init_mode = opts.init_mode
+    config.gating_mode = opts.gating_mode
+    config.use_appearance = not opts.only_motion
+
     data = Data(seq_path=config.seq_path, is_test=True, seq_names=seq_names)
     try:
         gt_data = Data(seq_path=config.seq_path, seq_names=seq_names)
     except (IOError, RuntimeError) as e:
         print(e)
-        print('[Error] ground data cannot be loaded, deactivate the evaluation mode if its ON')
+        print('[Error] Ground data cannot be loaded, deactivate the evaluation mode if its ON')
         gt_data = None
         opts.evaluate = False
     accs = [mm.MOTAccumulator(auto_id=True) for _ in range(len(seq_names))]
@@ -149,11 +154,15 @@ if __name__ == "__main__":
 
         _track = Track(seq_name, seq_info, data, config, fr_delay=fr_delay, nn_cls=nn_cls, visualization=False)
 
+        print('================================== Debug ==================================')
         print("Sequence name : {}".format(seq_name))
         print("frame interval : {}, fps : {}".format(fr_intv, seq_info[2]))
         print('thresh : (iou){:2f}, (shp){:2f}, (dist){:2f}'.format(config.assoc_iou_thresh, config.assoc_shp_thresh,
                                                                     config.assoc_dist_thresh))
-
+        print('init mode : {}, gating mode : {}, semi_on : {}, use_appearance : {}'.format(config.init_mode,
+                                                                                           config.gating_mode,
+                                                                                           config.semi_on,
+                                                                                           config.use_appearance))
         """
         Start tracking
         cur_fr : sequential frame number [1, 2, 3, ....]

@@ -53,11 +53,13 @@
     * Add your own tracking sequence group in ```sequence_groups```.
 
 4. Perform tracking using ```tracking_demo.py```.
-    * tracking thresholds can be controlled by modifying ```config.py```.
-    * There exist a few mode on-off variables in ```tracking_demo.py```.
+    * Tracking thresholds can be controlled by modifying ```config.py```.
+    * List of significant commandline arguments in ```tracking_demo.py```.
         * ```set_fps``` : manipulates an FPS and drop frames of videos
         * ```semi_on``` : improves a tracking performance using interpolation and restoration
         * ```init_mode``` : ```mht``` (faster, geometry-based), ```delayed``` (geometry + appearance)
+        * ```gating_mode``` : ```iou``` (intersection-over-union), ```maha``` (pose + shape)
+        * ```only_motion``` : Do not use appearance matching
 
 ## Training settings
 1. Set the data as same as 'Tracking settings' above.
@@ -85,9 +87,9 @@
   * Locate the downloaded models in ```model``` directory
   * Download links
 
-    JI-Net : https://drive.google.com/file/d/1VnJoyUOuDPbP82kgqznoZlKSaZ7QdaiZ/view?usp=sharing
+    JI-Net : https://drive.google.com/file/d/1DeRv7RggGFp4qCMGdAGZTP9n-wES5ld2/view?usp=sharing
     
-    LSTM : https://drive.google.com/file/d/1jkGdbSqfP7Pc9CyFxNT6aAAam1pWyA_X/view?usp=sharing
+    LSTM : https://drive.google.com/file/d/1kTJaK5hXN0sf52udPyUR-VWrpkfQj7od/view?usp=sharing
 
 ## Qualitative results
 
@@ -105,7 +107,7 @@
   year={2018},
   booktitle={IEEE AVSS}
 }
-@inproceedings{ycyoon2020,
+@inproceedings{ycyoon2021,
   title={Online Multiple Pedestrians Tracking using Deep Temporal Appearance Matching Association},
   author={Young-Chul Yoon Du Yong Kim and Young-min Song and Kwangjin Yoon and Moongu Jeon},
   year={2021},

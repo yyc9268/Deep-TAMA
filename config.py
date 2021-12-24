@@ -8,20 +8,23 @@ class Config:
         self.seq_path = os.path.join(self.desktop_path, "dataset", 'MOT')
 
         # Tracking parameters
-        self.init_mode = 'mht'
-        self.semi_on = False
         self.det_thresh = 0.1
         self.nms_iou_thresh = 0.4
         self.max_hyp_len = 5
         self.alpha = 1
+        self.valid_miss_frame = 0  # maximum consecutive frames with only predictions to be included in results
 
-        self.gating_method = "iou"  # iou or mahalanobis
-        if self.gating_method == "iou":  # Good for general purposes
+        self.semi_on = False
+        self.use_appearance = True
+        self.init_mode = 'mht'  # mht or delay
+        self.gating_mode = "iou"  # iou or mahalanobis
+
+        if self.gating_mode == "iou":  # Good for general purposes
             self.gating_thresh = 0.3
-            self.assoc_thresh = self.gating_thresh * 0.7
-        elif self.gating_method == "mahalanobis":  # Good for top-view perspective
+            self.assoc_thresh = self.gating_thresh
+        elif self.gating_mode == "maha":  # Good for top-view perspective
             self.gating_thresh = 0.5
-            self.assoc_thresh = self.gating_thresh * 0.7
+            self.assoc_thresh = self.gating_thresh
         else:
             raise NotImplementedError
 

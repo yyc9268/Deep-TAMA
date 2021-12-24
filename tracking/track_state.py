@@ -48,7 +48,7 @@ class TrackState:
         self.ppp = 100
         self.P = np.eye(4)*self.ppp
         self.H = np.array([[1, 0, 0, 0], [0, 0, 1, 0]])  # H matrix: measurement model
-        self.R = 10*np.eye(2)  # measurement model covariance, we assume 10 pixels
+        self.noise_weight = np.eye(2) * 0.05
 
         # covariance used for motion affinity evaluation
         self.pos_var = np.diag([30**2, 75**2])
@@ -102,9 +102,10 @@ class TrackState:
         :return: updated track state, covariance
         """
         # LT to center
+        adaptive_R = self.noise_weight * (y[2] + y[3])/2  # Set proportional to the input size
         Y = np.array([[y[0]+y[2]/2], [y[1]+y[3]/2]])
         IM = self.H @ self.X
-        IS = self.R + self.H @ self.P @ self.H.T
+        IS = adaptive_R + self.H @ self.P @ self.H.T
         K = (self.P @ self.H.T)@np.linalg.inv(IS)
 
         self.X = self.X + K @ (Y-IM)

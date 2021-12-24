@@ -39,7 +39,7 @@ class Track:
         self.visualization = visualization
 
     def __del__(self):
-        print("[Debug] Track class deleted")
+        print("Track class deleted")
 
     def track(self, bgr_img, dets, fr_num):
         """
@@ -90,9 +90,8 @@ class Track:
         sim_mat, num_matching_templates = self.get_geo_similarity(dets, trk, fr_num)
 
         # Appearance similarity calculation
-        if sum(num_matching_templates) > 0:
-            likelihoods = self.get_appearance_similarity(dets, trk, sim_mat, num_matching_templates, bgr_img,
-                                                         fr_num)
+        if self.config.use_appearance and sum(num_matching_templates) > 0:
+            likelihoods = self.get_appearance_similarity(dets, trk, sim_mat, num_matching_templates, bgr_img, fr_num)
 
             cur_idx = 0
             for i in range(sim_mat.shape[0]):
@@ -132,10 +131,10 @@ class Track:
         # Motion similarity calculation
         for i, det in enumerate(dets):
             for j, trk in enumerate(prev_trk):
-                if self.config.gating_method == 'iou':
+                if self.config.gating_mode == 'iou':
                     mot_sim = iou(det, trk.bbox_info(fr_num))
                     gated = mot_sim < self.config.gating_thresh
-                elif self.config.gating_method == 'mahalanobis':
+                elif self.config.gating_mode == 'mahalanobis':
                     mot_sim = trk.mahalanobis_similarity(det)
                     shp_sim = trk.get_shp_similarity(det[2:4], fr_num)
                     gated = mot_sim*shp_sim < self.config.gating_thresh
@@ -462,10 +461,9 @@ class Track:
         :return: None
         """
         tmp_save = []
-        valid_miss_num = 1
         if len(self.trk_state) > 0:
             for trk in self.trk_state:
-                if trk.recent_fr > fr_num - valid_miss_num:
+                if trk.recent_fr >= fr_num - self.config.valid_miss_frame:
                     tmp_state = trk.save_info(fr_num)
                     tmp_save.append(tmp_state)
 
