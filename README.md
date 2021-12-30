@@ -5,12 +5,6 @@
 
 <img src="/images/framework.png" height="300"> 
 
-## To Do
-* ~~Code refactoring (12/12)~~
-* ~~Two initialization methods (MHT, association-based)~~
-* ~~Tracking evaluation code~~
-* Demo tracking sequence update
-
 ## Enviroment
     OS : Windows10 64bit (Verified to works fine on Ubuntu 18.04)
     CPU : Intel i5-8500 3.00GHz
@@ -68,28 +62,36 @@
     * Training and validation dataset should have ```gt``` folder.
 
 3. Perform training using ```training_demo.py```.
-    * JI-Net training should be performed first.
-    * Using pre-trained JI-Net model, LSTM can be trained.
+    * JI-Net training should be done first.
+    * Using JI-Net model as a feature extractor, LSTM can be trained.
 
 ## Evaluation
+* Evaluated performance on sequence group ```validation.txt```.
+    * The highlighted performance can be achieved by default demo setting.
+
+|Setting|MOTA|IDF1|MT|PT|ML|IDs|FM|
+|---|---|---|---|---|---|---|---|
+|Baseline (no appearance feature)|38.9%|45.0%|40|138|166|128|648|
+|Baseline + semi-online|40.8%|47.4%|76|123|145|126|421|
+|**Deep-TAMA + semi-online**|43.0%|49.4%|80|114|150|122|364|
+
 * For evaluation, set the command line argument ```--evaluate``` in ```tracking_demo.py```
-* Currently, our code doesn't support HOTA.
-    * For HOTA evaluation, check [TrackEval](https://github.com/JonathonLuiten/TrackEval).
+* Currently, our code doesn't support HOTA. For HOTA, check [TrackEval](https://github.com/JonathonLuiten/TrackEval).
 * The code produces tracking results in both txt and image format.
 
-## Pre-trained models
-* LSTM validation loss and accuracy
-    <p float="left">
-      <img src="/images/lstm.png" height="250"> 
-    </p>
 
+## Pre-trained models
+* Validation accuracy and loss comparison
+    * Both of JI-Net and LSTM used cross-entropy loss for training
+    <p float="left">
+      <img src="/images/acc_comparison.png" height="200">
+      <img src="/images/loss_comparison.png" height="200">
+    </p>
 * We provide pre-trained models for JI-Net and LSTM
   * Locate the downloaded models in ```model``` directory
   * Download links
-
-    JI-Net : https://drive.google.com/file/d/1DeRv7RggGFp4qCMGdAGZTP9n-wES5ld2/view?usp=sharing
-    
-    LSTM : https://drive.google.com/file/d/1kTJaK5hXN0sf52udPyUR-VWrpkfQj7od/view?usp=sharing
+    * JI-Net : https://drive.google.com/file/d/1Lreh8FxDYYx3ymgm9B4TuD_lz0y7Vi7C/view?usp=sharing
+    * LSTM : https://drive.google.com/file/d/1KbUHnfVSRkuV6SMFCdvs7U5PuRoR2Dxi/view?usp=sharing
 
 ## Qualitative results
 
@@ -117,5 +119,5 @@
 
 <img src="/images/cvpr_award.jpg" height="400">
 
-This tracker has been awarded a 3rd Prize on [4th BMTT MOTChallenge Workshop](https://motchallenge.net/results/CVPR_2019_Tracking_Challenge/) held in CVPR 2019
-
+* This tracker has been awarded a 3rd Prize on [4th BMTT MOTChallenge Workshop](https://motchallenge.net/results/CVPR_2019_Tracking_Challenge/) held in CVPR 2019
+* If you have any question, feel free to contact by [yyc9268@gmail.com](yyc9268@gmail.com)
