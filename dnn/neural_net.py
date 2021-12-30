@@ -91,7 +91,8 @@ class neuralNet:
         relu3 = Activation('relu')(bnorm3)
         pool3 = MaxPool2D()(relu3)
         flattened = Flatten()(pool3)
-        encode4 = Dense(1152)(flattened)
+        drop1 = Dropout(rate=0.2)(flattened)
+        encode4 = Dense(1152)(drop1)
         bnorm4 = BatchNormalization()(encode4)
         relu4 = Activation('relu')(bnorm4)
         encode5 = Dense(self.matching_feature_sz)(relu4)
@@ -104,14 +105,13 @@ class neuralNet:
 
     def deeptama_output(self):
         """
-        LSTM network structure (The implementation is different from the paper)
+        LSTM network structure (The implementation is slightly different from the paper)
         :return: likelihood of input sequence
         """
         encode1 = Dense(153)(self.lstm_input)  # 153 -> 153
         bnorm1 = BatchNormalization()(encode1)
         tanh1 = Activation('tanh')(bnorm1)
         lstm_out = RNN(LSTMCell(128), return_sequences=False, go_backwards=False)(tanh1)
-        # concatenated = Bidirectional(layer=LSTM(128, return_sequences=True,), merge_mode='concat')(encode1)
         decode1 = Dense(64)(lstm_out)
         bnorm2 = BatchNormalization()(decode1)
         relu1 = Activation('relu')(bnorm2)
