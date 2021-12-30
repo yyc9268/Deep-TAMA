@@ -144,7 +144,7 @@ def train_lstm(nn_cls, continue_epoch, config):
         # Create training batch
         train_input_batch, train_idx = nn_cls.create_lstm_input(train_img_batch, train_shp_batch, train_trk_len)
         nn_cls.nets[model_name].fit(train_input_batch[train_idx], train_label_batch[train_idx],
-                                    batch_size=config.model[model_name]['epoch_batch_len'],
+                                    batch_size=config.model[model_name]['train_batch_len'],
                                     epochs=step + config.model[model_name]['repeat'], initial_epoch=step,
                                     validation_data=(val_x_batch[val_idx], val_y_batch[val_idx]),
                                     validation_freq=config.model[model_name]['log_intv'],
@@ -246,8 +246,8 @@ def main():
     parser.add_argument('--lstm_continue_epoch', '-lce', default=0, type=int,
                         help='Epoch from which LSTM training starts')
 
-    # cmd = ['-tj', '-tl']
-    cmd = ['-tl']
+    cmd = ['-tj', '-tl']
+    # cmd = ['-tl']
     opts = parser.parse_args(cmd)
 
     config = Config()

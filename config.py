@@ -43,7 +43,7 @@ class Config:
 
         self.model = {'jinet': {}, 'lstm': {}}
         model_name = 'jinet'
-        self.model[model_name]['init_lr'] = 1e-3
+        self.model[model_name]['init_lr'] = 1e-2
         self.model[model_name]['epoch_batch_len'] = 1024
         self.model[model_name]['train_batch_len'] = 32
         self.model[model_name]['val_batch_len'] = 32

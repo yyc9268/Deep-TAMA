@@ -235,7 +235,7 @@ class Data:
             id_list = self.id_lists[seq_idx]
             fr_rate = seq_info[name_idx][2]
 
-            max_fr_diff = fr_rate * 3
+            max_fr_diff = fr_rate * 2
 
             # Random anchor ID choice
             anchor_track_idx = random.choice(range(0, len(id_list)))
@@ -352,6 +352,7 @@ class Data:
             for idx in range(anchor_det_idx - 1, -1, -1):
                 if anchor_dets[idx][0] - anchor_det[0] > max_fr_diff:
                     st_idx = idx + 1
+                    break
 
             # Infeasible case
             if (anchor_det_idx - st_idx) <= min_len:
@@ -402,7 +403,6 @@ class Data:
             tmp_padding_shp_batch = np.zeros((max_trk_len - cur_trk_len, 3), dtype='float')
 
             is_valid3 = True
-
             for idx, pos_det in enumerate(pos_dets):
                 pos_det = np.array(pos_det, dtype='float')
                 pos_det[1:5] = augment_bbox(pos_det[1:5])
@@ -429,10 +429,10 @@ class Data:
                 tmp_pos_img_batch = np.vstack(
                     (tmp_pos_img_batch, np.expand_dims(np.concatenate((pos_img, anchor_img), 2), 0)))
                 tmp_pos_shp_batch = np.vstack(
-                    (tmp_pos_shp_batch, np.expand_dims((pos_shp - anchor_shp) / anchor_shp, 0)))
+                    (tmp_pos_shp_batch, np.expand_dims(pos_shp_diff, 0)))
                 tmp_neg_img_batch = np.vstack(
                     (tmp_neg_img_batch, np.expand_dims(np.concatenate((pos_img, neg_img), 2), 0)))
-                tmp_neg_shp_batch = np.vstack((tmp_neg_shp_batch, np.expand_dims((pos_shp - neg_shp) / neg_shp, 0)))
+                tmp_neg_shp_batch = np.vstack((tmp_neg_shp_batch, np.expand_dims(neg_shp_diff, 0)))
 
             if not is_valid3:
                 continue
